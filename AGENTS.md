@@ -51,11 +51,13 @@ Section markers are **multi-line block comments** (sentence-case label + period)
  */
 ```
 
-Skip markers on lean single-export files where they'd add ceremony only. Order (omit unused; no empty **Types.** / **Helpers.**):
+Do **not** collapse these to single-line `/* Types. */`. Skip markers entirely on lean single-export files where they'd add ceremony only. Order (omit unused; no empty **Types.** / **Helpers.**):
 
 1. **Types.** · **Constants.**
 2. Entry — the module's primary export, or **Config.** for `vite.config.ts`
 3. **Helpers.** — always last
+
+**Tests:** the same markers apply once a test file has real structure (arbitraries/generators, shared helper functions, fixtures) beyond a single `describe`/`test` block. **Constants.** (generators, fixtures) → **Script.** or **Tests.** (the `describe`/`test` bodies) → **Helpers.**. A short, single-purpose test file can skip markers the same as any other lean file.
 
 ## Code style
 

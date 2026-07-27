@@ -14,16 +14,11 @@ import {describe, expect, test} from 'vite-plus/test';
 
 import {format} from '../src/index.ts';
 
+/*
+ * Types.
+ */
+
 type Lang = 'js' | 'css' | 'html';
-
-function formatFixture(input: string, lang: Lang): string {
-  return lang === 'js' ? format(input) : input;
-}
-
-const LANGS: readonly Lang[] = ['js', 'css', 'html'];
-const FIXTURES_DIR = fileURLToPath(new URL('./fixtures', import.meta.url));
-const INPUT_MARKER = '.input.';
-const UPDATE_SNAPSHOTS = process.env.UPDATE_SNAPSHOTS === '1';
 
 type FixtureCase = {
   name: string;
@@ -31,25 +26,18 @@ type FixtureCase = {
   expectedPath: string;
 };
 
-function discoverFixtures(lang: Lang): FixtureCase[] {
-  const dir = join(FIXTURES_DIR, lang);
-  if (!existsSync(dir)) {
-    return [];
-  }
+/*
+ * Constants.
+ */
 
-  return readdirSync(dir)
-    .filter(file => file.includes(INPUT_MARKER))
-    .map(file => {
-      const markerIndex = file.indexOf(INPUT_MARKER);
-      const name = file.slice(0, markerIndex);
-      const ext = file.slice(markerIndex + INPUT_MARKER.length);
-      return {
-        name,
-        inputPath: join(dir, file),
-        expectedPath: join(dir, `${name}.expected.${ext}`)
-      };
-    });
-}
+const LANGS: readonly Lang[] = ['js', 'css', 'html'];
+const FIXTURES_DIR = fileURLToPath(new URL('./fixtures', import.meta.url));
+const INPUT_MARKER = '.input.';
+const UPDATE_SNAPSHOTS = process.env.UPDATE_SNAPSHOTS === '1';
+
+/*
+ * Tests.
+ */
 
 for (const lang of LANGS) {
   const cases = discoverFixtures(lang);
@@ -87,4 +75,32 @@ for (const lang of LANGS) {
       });
     }
   });
+}
+
+/*
+ * Helpers.
+ */
+
+function formatFixture(input: string, lang: Lang): string {
+  return lang === 'js' ? format(input) : input;
+}
+
+function discoverFixtures(lang: Lang): FixtureCase[] {
+  const dir = join(FIXTURES_DIR, lang);
+  if (!existsSync(dir)) {
+    return [];
+  }
+
+  return readdirSync(dir)
+    .filter(file => file.includes(INPUT_MARKER))
+    .map(file => {
+      const markerIndex = file.indexOf(INPUT_MARKER);
+      const name = file.slice(0, markerIndex);
+      const ext = file.slice(markerIndex + INPUT_MARKER.length);
+      return {
+        name,
+        inputPath: join(dir, file),
+        expectedPath: join(dir, `${name}.expected.${ext}`)
+      };
+    });
 }

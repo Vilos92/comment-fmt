@@ -10,6 +10,10 @@ import {isTableLike} from '../../src/core/predicates.ts';
 import {format} from '../../src/index.ts';
 import {findComments} from '../../src/lang/js.ts';
 
+/*
+ * Constants.
+ */
+
 const wordArb = fc
   .string({minLength: 1, maxLength: 24, unit: 'grapheme'})
   .filter(word => !/[\s/*`'"\\]/u.test(word) && word.length > 0);
@@ -44,33 +48,9 @@ const snippetArb = fc
     return `${comment}\nconst x = 1;\n`;
   });
 
-function nonCommentTokenStream(source: string): string {
-  const comments = findComments(source);
-  let residual = source;
-  for (let i = comments.length - 1; i >= 0; i -= 1) {
-    const comment = comments[i];
-    if (comment) {
-      residual = residual.slice(0, comment.start) + residual.slice(comment.end);
-    }
-  }
-  return residual.replace(/\s+/gu, '');
-}
-
-function commentWords(source: string): string[] {
-  const words: string[] = [];
-  for (const comment of findComments(source)) {
-    const body = source.slice(comment.start + comment.open.length, comment.end - comment.close.length);
-    for (const line of body.split('\n')) {
-      const stripped = line.replace(/^[ \t]*\*?[ \t]?/u, '');
-      for (const word of stripped.split(/\s+/u)) {
-        if (word.length > 0) {
-          words.push(word);
-        }
-      }
-    }
-  }
-  return words.sort();
-}
+/*
+ * Tests.
+ */
 
 describe('invariants', () => {
   test('idempotency: fmt(fmt(x)) === fmt(x)', () => {
@@ -114,3 +94,35 @@ describe('invariants', () => {
     );
   });
 });
+
+/*
+ * Helpers.
+ */
+
+function nonCommentTokenStream(source: string): string {
+  const comments = findComments(source);
+  let residual = source;
+  for (let i = comments.length - 1; i >= 0; i -= 1) {
+    const comment = comments[i];
+    if (comment) {
+      residual = residual.slice(0, comment.start) + residual.slice(comment.end);
+    }
+  }
+  return residual.replace(/\s+/gu, '');
+}
+
+function commentWords(source: string): string[] {
+  const words: string[] = [];
+  for (const comment of findComments(source)) {
+    const body = source.slice(comment.start + comment.open.length, comment.end - comment.close.length);
+    for (const line of body.split('\n')) {
+      const stripped = line.replace(/^[ \t]*\*?[ \t]?/u, '');
+      for (const word of stripped.split(/\s+/u)) {
+        if (word.length > 0) {
+          words.push(word);
+        }
+      }
+    }
+  }
+  return words.sort();
+}

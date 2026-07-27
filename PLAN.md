@@ -22,6 +22,7 @@ change to reflect progress -- this section is the only part that does.
 | 5 -- Block reshape       | not started |                                                        |
 | 6 -- CSS + HTML lexers   | not started |                                                        |
 | 7 -- Rollout and tuning  | not started |                                                        |
+| 8 -- Astro               | unscheduled | not committed to; see §4, §12                          |
 
 **PR #2 (this one) finishes** §12 Phase 2's scope: `core/{constants,measure,predicates,blocks,wrap}.ts`
 and `lang/js.ts`, plus `src/index.ts`'s `format()` wired to the real engine in place of the Phase 1
@@ -70,6 +71,11 @@ configured print width. This converts a repeated manual fix into a deterministic
 All share one house style: single quotes, semicolons, no trailing commas, arrow parens omitted, no
 bracket spacing, **110-column print width**. (Biome's `arrowParentheses: "asNeeded"` and oxfmt's
 `arrowParens: "avoid"` are the same setting under two names.)
+
+**Not yet covered: `.astro` files.** `greglinscheid.com` is Astro-based, so its `.astro` files (frontmatter
+between `---` fences, HTML-like template markup, both can hold comments) sit outside JS/TS/JSX/TSX +
+CSS/SCSS + HTML as scoped above. Worth adding later, not scoped into any phase yet -- see §4's
+architecture note and §12's unscheduled Phase 8.
 
 ---
 
@@ -148,6 +154,7 @@ src/
     js.ts                       // and /* */ ; skips strings, template literals, regex
     css.ts                       /* */ and SCSS // ; skips strings and url()
     html.ts                      <!-- --> ; skips attrs, delegates <script>/<style>
+    astro.ts (later, unscheduled)  frontmatter delegates to js.ts, template delegates to html.ts
   cli/
     index.ts                    argv, --check / --write / --diff, exit codes
 test/
@@ -168,6 +175,14 @@ test/
 literals, template literals (including nested `${}`), and regex literals. The regex-vs-division ambiguity
 is the classic trap — resolve it by tracking the previous significant token. **This is the highest-risk
 component in the project**; see §9.
+
+**On the (unscheduled) Astro lexer:** an `.astro` file is frontmatter (TS between `---` fences) followed
+by HTML-like template markup that can itself hold `{expression}` slots. The natural design mirrors how
+`html.ts` already delegates `<script>`/`<style>` to `js.ts`/`css.ts`: split the file at the fence
+boundaries, delegate the frontmatter to `js.ts` unchanged, and delegate the template portion to `html.ts`
+(which would then also need to treat a bare `{...}` expression slot as a nested-JS region, the same way it
+already treats `<script>`). Whether that JS-in-template handling is cheap or turns into its own can of
+worms is exactly the kind of thing to find out by actually attempting it, not by planning further here.
 
 ---
 
@@ -642,6 +657,11 @@ between forms on every edit.
 the abstraction leaked in Phase 2 — fix that rather than special-casing.
 
 **Phase 7 — Rollout and tuning.** §11.
+
+**Phase 8 — Astro (unscheduled).** Not committed to yet, no target date -- captured here so the idea has
+a home instead of living only in a conversation. See §4's architecture note for the shape a `lang/astro.ts`
+would likely take. Revisit once Phase 7 is done and `greglinscheid.com`'s rollout has surfaced whether
+`.astro` comments are common enough there to be worth it.
 
 ---
 
