@@ -632,6 +632,36 @@ pre-commit:
 can't be surprised by our output. Verify on a real file that the two converge — if `biome check --write`
 reflows what we just wrote, or vice versa, you have a fight and must narrow our scope.
 
+### README
+
+Once the tool is operational (not before -- a README describing behavior that doesn't exist yet is worse
+than a thin one), write a proper one. Look at other well-regarded CLI/formatter READMEs for structural
+inspiration (what order they cover install / usage / config / rationale in, how much they lead with
+"why" vs "how") rather than inventing a structure from nothing. Beyond whatever that survey turns up,
+make sure it covers:
+
+- **Motivation, refined from §1's one-liner.** The real story has two parts, and both are worth stating
+  plainly rather than compressing into one sentence: a careful human writing a comment by hand tends to
+  self-balance it reasonably well as they type. An agent generating the same comment often doesn't --
+  it'll happily emit a comment that blows past the configured print width, or wraps unevenly, because it
+  isn't tracking column position the way a human's eyes are. That's the sharper motivation, not just
+  "agents don't know the print width."
+- **A comparison table.** Two categories belong in it, not one: dedicated comment-reflow tools (this
+  project's own upstream reference, `eslint-plugin-comment-length`, is one; look for others) _and_ how
+  the mainstream formatters handle comments today, since most people's mental model of "my formatter
+  handles this" is wrong and the table should correct it -- Prettier explicitly refuses to reflow
+  comments at all (by design, see §8.4's framing of why), gofmt leaves comment text untouched always,
+  and rustfmt/clang-format/Biome each need their own direct check rather than an assumed answer, since
+  none of them are as clearly documented as Prettier's stance. Verify every row against the tool's
+  actual current behavior/docs when writing this, not from memory -- these move.
+- **This isn't only for agent-authored code.** A human mid-review who just wants a deterministic way to
+  "hold the line" on a width limit benefits too, independent of who wrote the comment. Say so. But also
+  be honest about what made this hard: making comment reflow a _deterministically correct_ operation --
+  never corrupting code, never mangling a hand-aligned table, converging instead of oscillating -- is
+  the actual engineering problem this project spent most of its effort on (see §7's overflow-only gate
+  and §9's testing strategy), not a solved-by-construction given. The README should reflect that this
+  was genuinely hard to get right, not imply it's a trivial wrapper around an existing idea.
+
 ---
 
 ## 12. Phases
