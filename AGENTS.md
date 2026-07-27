@@ -19,6 +19,9 @@ Docs are local at `node_modules/vite-plus/docs` or online at https://viteplus.de
 
 Living conventions for this repo. Ask whether new habits belong here vs `README.md`.
 
+`PLAN.md` is the architecture and phasing source of truth -- code comments citing "plan §N" mean that
+document. Check it before proposing a structural change or re-deriving something it already settled.
+
 ## Toolchain
 
 **Bun-first** for installs and `package.json` scripts (`bun install`, `bun run …`, `bunx …`). Day-to-day tooling is **`vp`** per the Vite+ section above. Prefer the Bun (or `vp`) equivalent when upstream docs show `npm` / `pnpm` / `npx`.

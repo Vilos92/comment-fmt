@@ -25,7 +25,10 @@ export default defineConfig({
     singleQuote: true,
     sortImports: true,
     sortPackageJson: {sortScripts: true},
-    ignorePatterns: ['dist/**']
+    // Fixture pairs are test data, not source -- deliberately exotic/invalid in places (that's
+    // the point), and must stay byte-exact for the snapshot harness. Reformatting one would
+    // silently break what the fixture is asserting.
+    ignorePatterns: ['dist/**', 'test/fixtures/**']
   },
   lint: {
     plugins: ['typescript', 'import'],
@@ -38,6 +41,8 @@ export default defineConfig({
       'no-nested-ternary': 'error',
       // Gates the explicit `.ts` import-suffix convention required by nodenext resolution.
       'import/extensions': ['error', 'ignorePackages']
-    }
+    },
+    // Same reasoning as fmt.ignorePatterns -- fixture content isn't held to house lint/type rules.
+    ignorePatterns: ['test/fixtures/**']
   }
 });

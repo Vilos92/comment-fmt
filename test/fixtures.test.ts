@@ -3,20 +3,21 @@
 // `<name>.expected.<ext>`, eyeball it, commit both. Re-running without the env var just asserts
 // the formatter's output still matches the committed `.expected` file.
 //
-// Phase 1 note: `core/wrap.ts` and the `lang/` lexers don't exist yet (Phase 2+), so `format`
-// below is an identity placeholder. It makes this harness structurally exercised end-to-end today
-// -- discovery, read, compare/write -- without asserting anything about real formatting. Replace
-// `format` with the real export from `../src/index.ts` once Phase 2 lands, and delete this note.
+// Only `js` has a real formatter behind it as of Phase 2 (`lang/js.ts` + `core/`) -- `css` and
+// `html` lexers land in Phase 6, so those two langs fall back to an identity pass-through and
+// stay at zero fixtures until then.
 import {existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync} from 'node:fs';
 import {dirname, join} from 'node:path';
 import {fileURLToPath} from 'node:url';
 
 import {describe, expect, test} from 'vite-plus/test';
 
+import {format} from '../src/index.ts';
+
 type Lang = 'js' | 'css' | 'html';
 
-function format(input: string, _lang: Lang): string {
-  return input;
+function formatFixture(input: string, lang: Lang): string {
+  return lang === 'js' ? format(input) : input;
 }
 
 const LANGS: readonly Lang[] = ['js', 'css', 'html'];
@@ -63,7 +64,7 @@ for (const lang of LANGS) {
     for (const fixtureCase of cases) {
       test(fixtureCase.name, () => {
         const input = readFileSync(fixtureCase.inputPath, 'utf8');
-        const actual = format(input, lang);
+        const actual = formatFixture(input, lang);
 
         if (UPDATE_SNAPSHOTS) {
           mkdirSync(dirname(fixtureCase.expectedPath), {recursive: true});
