@@ -31,10 +31,15 @@ fixture pairs live under `test/fixtures/js/`, covering the plan's verified lexer
 §8.1 directive list, JSDoc tag protection, and every bug found during an ultrareview pass and the
 follow-up design work on the orphan guard's tail-rebalance step.
 
-**Once Phase 7 lands, delete this file.** It's a handoff document for building the tool, not permanent
-project documentation. Once the plan it describes is fully executed, keeping it around only means
-either letting `plan §N` references in code comments go stale, or maintaining a document whose job is
-already finished. `README.md` and the code itself are the source of truth from that point on.
+**Once Phase 7 lands, delete this file** -- and before deleting it, sweep every `(plan §N)` citation out
+of the codebase's comments first. It's a handoff document for building the tool, not permanent project
+documentation, and every comment that cites it (13+ across `src/`, `test/`, and `AGENTS.md` as of this
+PR) is a dangling reference the moment it's gone. A comment should explain _why_ the code works the way
+it does -- that's true forever, regardless of which phase built it. A comment that instead explains what
+the plan said to do is only true _while the plan still exists to say it_, and reads as unfinished once
+the roadmap it's pointing at is done and removed. Rewrite each citation into the rationale it was
+standing in for; if a comment turns out to have no real "why" without the citation, that's worth
+noticing too, not papering over.
 
 ---
 
