@@ -1,10 +1,16 @@
 import {splitIntoBlocks} from './blocks.ts';
 
-/* Types. */
+// comment-fmt-ignore
+/*
+ * Types.
+ */
 
 export type BlockShape = 'single-line' | 'multi-line';
 
-/* Entry. */
+// comment-fmt-ignore
+/*
+ * Entry.
+ */
 
 /**
  * `true` if a block comment's content could ever be a candidate for single-line collapse (plan

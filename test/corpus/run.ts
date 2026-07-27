@@ -15,6 +15,7 @@ import {extname, join} from 'node:path';
 import {format} from '../../src/index.ts';
 import {findComments} from '../../src/lang/js.ts';
 
+// comment-fmt-ignore
 /*
  * Types.
  */
@@ -33,6 +34,7 @@ type FileError = {
   readonly message: string;
 };
 
+// comment-fmt-ignore
 /*
  * Constants.
  */
@@ -43,6 +45,7 @@ const DIRECTORIES_TO_SKIP: ReadonlySet<string> = new Set(['.git']);
 
 const FORMATTABLE_EXTENSIONS: ReadonlySet<string> = new Set(['.js', '.jsx', '.ts', '.tsx']);
 
+// comment-fmt-ignore
 /*
  * Entry.
  */
@@ -75,6 +78,7 @@ function main(): void {
 
 main();
 
+// comment-fmt-ignore
 /*
  * Helpers.
  */

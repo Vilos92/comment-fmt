@@ -1,4 +1,7 @@
-/* Constants. */
+// comment-fmt-ignore
+/*
+ * Constants.
+ */
 
 /**
  * Directives that must never be reflowed, even when they overflow. Wrapping one changes its
@@ -72,7 +75,10 @@ const RUN_OF_SPACES = / {2,}/g;
 
 const MIN_ALIGNED_LINES = 3;
 
-/* Entry. */
+// comment-fmt-ignore
+/*
+ * Entry.
+ */
 
 /**
  * `true` if `line` starts (after trimming) with a known tool directive, or one from
@@ -139,7 +145,10 @@ export function checkIsTableLike(lines: readonly string[]): boolean {
   );
 }
 
-/* Helpers. */
+// comment-fmt-ignore
+/*
+ * Helpers.
+ */
 
 function checkHasGfmDelimiterRow(lines: readonly string[]): boolean {
   for (let i = 1; i < lines.length; i += 1) {

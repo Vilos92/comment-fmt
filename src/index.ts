@@ -10,7 +10,10 @@ import {wrap, type WrapOptions} from './core/wrap.ts';
 import {findComments} from './lang/js.ts';
 import type {Comment} from './lang/types.ts';
 
-/* Types. */
+// comment-fmt-ignore
+/*
+ * Types.
+ */
 
 export type FormatOptions = WrapOptions & {
   /** Plan §12 Phase 5's single-line collapse threshold. Not part of the §6 config surface. */
@@ -19,7 +22,10 @@ export type FormatOptions = WrapOptions & {
   readonly forceMultilineMinWidth?: number;
 };
 
-/* Constants. */
+// comment-fmt-ignore
+/*
+ * Constants.
+ */
 
 /**
  * Default continuation-line prefix for a block comment being expanded from single-line to
@@ -51,7 +57,10 @@ const IGNORE_MARKER = /comment-fmt-ignore(?!-file)\b/;
  */
 const IGNORE_MARKER_WHOLE_COMMENT = /^comment-fmt-ignore(\s*(--|:)\s*\S.*)?$/;
 
-/* Entry. */
+// comment-fmt-ignore
+/*
+ * Entry.
+ */
 
 /**
  * Reflows every `//` and `/* *​/` comment in JS/TS/JSX/TSX source text to fit within
@@ -86,7 +95,10 @@ export function format(source: string, options: FormatOptions = {}): string {
   return result;
 }
 
-/* Helpers. */
+// comment-fmt-ignore
+/*
+ * Helpers.
+ */
 
 /**
  * `true` if a `comment-fmt-ignore-file` marker (plan §8.4) itself sits within the file's first

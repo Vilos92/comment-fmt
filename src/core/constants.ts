@@ -1,4 +1,7 @@
-/* Constants. */
+// comment-fmt-ignore
+/*
+ * Constants.
+ */
 
 /** Hard cap. No output line may ever exceed this width. See `wrap.ts` step 0 and step 4. */
 export const DEFAULT_MAX_LENGTH = 110;
