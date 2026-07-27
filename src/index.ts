@@ -1,3 +1,4 @@
+import {splitIntoBlocks} from './core/blocks.ts';
 import {DEFAULT_MAX_LENGTH} from './core/constants.ts';
 import {measure} from './core/measure.ts';
 import {wrap, type WrapOptions} from './core/wrap.ts';
@@ -175,6 +176,22 @@ function reflowLineComment(comment: Comment, raw: string, options: FormatOptions
   const content = raw.slice(comment.open.length).replace(/^[ \t]+/, '');
   const prefixWidth = comment.indent + comment.open.length + 1; // Reconstructed as `// `.
   const wrapped = wrap([content], prefixWidth, options);
+  if (
+    wrapped.length === 1 &&
+    wrapped[0] === content &&
+    checkIsProtectedLine(content, options.extraDirectives)
+  ) {
+    // `wrap()` left this untouched specifically because it's protected (plan §8.1/§8.3), not
+    // merely because it already fits its own budget. Reconstructing below hardcodes exactly one
+    // space after `//`, which would silently collapse an atypical original spacing (e.g.
+    // `//  eslint-disable ...`, two spaces) even though a protected directive must be preserved
+    // byte-for-byte. Return the untouched original instead of risking that. Content that merely
+    // fits (not protected) still goes through the normal reconstruction below, whose hardcoded
+    // single space is what keeps *that* case within `maxLength` in the first place: an original
+    // with extra internal spacing could otherwise measure over the limit by the outer check while
+    // `wrap()`'s own budget (which assumes exactly one space) reads it as already fitting.
+    return raw;
+  }
   const indentStr = ' '.repeat(comment.indent);
 
   return wrapped
@@ -234,6 +251,24 @@ function reflowBlockComment(comment: Comment, raw: string, options: FormatOption
   const openWidth = comment.indent + comment.open.length;
   const budget = Math.max(measure(continuationPrefix), openWidth);
   const wrapped = wrap(contentLines, budget, options);
+  if (
+    wasSingleLine &&
+    wrapped.length === 1 &&
+    wrapped[0] === contentLines[0] &&
+    checkIsProtectedLine(contentLines[0] ?? '', options.extraDirectives)
+  ) {
+    // `wrap()` left this untouched specifically because it's protected (plan §8.1/§8.3), not
+    // merely because it already fits its own budget. Reconstructing below would lose the
+    // comment's original leading whitespace and force a single-line block comment into a spurious
+    // multi-line shape (an opener line plus a separate closer line) even though a protected
+    // directive must be preserved byte-for-byte. Return the untouched original instead. Content
+    // that merely fits (not protected) still goes through the normal reconstruction below: `budget`
+    // above is a synthesized approximation of line 0's real width (see the comment on it), so an
+    // atypically-spaced original could otherwise read as already fitting `wrap()`'s budget while
+    // still exceeding `maxLength` by the outer, more literal measurement. The reconstruction's own
+    // whitespace normalization is what closes that gap for non-protected content.
+    return raw;
+  }
 
   const first = wrapped[0] ?? '';
   const rest = wrapped.slice(1).map(line => `${continuationPrefix}${line}`.trimEnd());
@@ -241,6 +276,23 @@ function reflowBlockComment(comment: Comment, raw: string, options: FormatOption
   const lines = terminated ? [opener, ...rest, `${closePrefix}${comment.close}`] : [opener, ...rest];
 
   return lines.join('\n');
+}
+
+/**
+ * `true` for a single physical line `wrap()` itself would never modify: a directive (plan §8.1), a
+ * blank line, an unterminated fence or `@example` marker, or table-like content (plan §8.3).
+ * Distinguishes "`wrap()` left this untouched because it's protected, so the original must be
+ * preserved byte-for-byte" from "`wrap()` left this untouched because it happens to already fit
+ * its own budget," which is safe to reconstruct normally even though the text itself didn't
+ * change. Delegates to `splitIntoBlocks` itself, the same function `wrap()` uses internally,
+ * rather than re-deriving its protection rules here: an earlier version of this helper checked
+ * only `checkIsDirective`/`checkIsTableLike` directly and silently missed the fence/`@example`/
+ * blank-line cases, which would have reintroduced the exact class of bug this file's other fixes
+ * were written to close, just for a different protected-block reason.
+ */
+function checkIsProtectedLine(line: string, extraDirectives: readonly string[] | undefined): boolean {
+  const blocks = splitIntoBlocks([line], extraDirectives ?? []);
+  return blocks[0]?.protected ?? false;
 }
 
 function stripLinePrefix(line: string, prefix: string): string {

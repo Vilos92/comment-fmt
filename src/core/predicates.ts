@@ -56,10 +56,19 @@ const DIRECTIVE_MARKERS: readonly string[] = [
 
 /** GFM table delimiter row: only pipes, colons, dashes, and whitespace, with at least one pipe. */
 const GFM_DELIMITER_ROW = /^[\s|:-]+$/;
-const HAS_PIPE = /\|/;
 
-const BOX_DRAWING_CHARS = /[─│┌┐└┘├┤┬┴┼]/;
-const ASCII_BOX_OR_TREE = /(\+-{2,}|\|--|├──|└──|`--)/;
+/**
+ * Exported so `--report-overwidth` (plan §9.3) can classify a comment into the same `has-pipe`
+ * shape this module already detects, without re-deriving the character set.
+ */
+export const HAS_PIPE = /\|/;
+
+/**
+ * Exported so `--report-overwidth` (plan §9.3) can classify a comment into the same
+ * `has-box-drawing` shape this module already detects, without re-deriving the character set.
+ */
+export const BOX_DRAWING_CHARS = /[─│┌┐└┘├┤┬┴┼]/;
+export const ASCII_BOX_OR_TREE = /(\+-{2,}|\|--|├──|└──|`--)/;
 
 const RUN_OF_SPACES = / {2,}/g;
 

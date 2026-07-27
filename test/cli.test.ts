@@ -163,6 +163,67 @@ describe('cli', () => {
     });
   });
 
+  describe('--report-overwidth', () => {
+    test('exits 0 and reports zero counts when nothing overflows', () => {
+      const filePath = join(scratchDir, 'clean.js');
+      writeFileSync(filePath, `${SHORT_COMMENT_LINE}\nconst x = 1;\n`);
+
+      const exitCode = runCli(['--report-overwidth', filePath], scratchDir);
+
+      expect(exitCode).toBe(0);
+      expect(readFileSync(filePath, 'utf8')).toBe(`${SHORT_COMMENT_LINE}\nconst x = 1;\n`);
+      const output = stdout.join('');
+      expect(output).toContain('prose: 0');
+      expect(output).not.toContain(SHORT_COMMENT_LINE);
+    });
+
+    test('classifies an overflowing, actually-changed single-line comment and prints its text', () => {
+      const filePath = join(scratchDir, 'overflow.js');
+      const original = `${OVERFLOWING_COMMENT_LINE}\nconst x = 1;\n`;
+      writeFileSync(filePath, original);
+
+      const exitCode = runCli(['--report-overwidth', filePath], scratchDir);
+
+      expect(exitCode).toBe(0);
+      expect(readFileSync(filePath, 'utf8')).toBe(original);
+      const output = stdout.join('');
+      // A `//` comment is exactly one physical line before reflow, so it lands in `single-line`
+      // (checked ahead of the `prose` fallback), not `prose`.
+      expect(output).toContain('single-line: 1');
+      expect(output).toContain(OVERFLOWING_COMMENT_LINE);
+    });
+
+    test('classifies an overflowing directive-only comment as protected, not as a finding', () => {
+      const filePath = join(scratchDir, 'directive.js');
+      const overflowingDirective =
+        '// eslint-disable-next-line some-rule-name -- a trailing rationale long enough to overflow the default one hundred and ten column limit';
+      writeFileSync(filePath, `${overflowingDirective}\nconst x = 1;\n`);
+
+      const exitCode = runCli(['--report-overwidth', filePath], scratchDir);
+
+      expect(exitCode).toBe(0);
+      const output = stdout.join('');
+      // The directive overflows but `format()` leaves it untouched (§8.1), so it must not be
+      // reported as a "miss" in any group.
+      expect(output).toContain('prose: 0');
+      expect(output).toContain('single-line: 0');
+      expect(output).not.toContain(overflowingDirective);
+    });
+
+    test('classifies an overflowing pipe-bearing comment as has-pipe, ahead of other groups', () => {
+      const filePath = join(scratchDir, 'table.js');
+      const words = Array.from({length: 20}, (_, i) => `word${i}`).join(' | ');
+      const original = `// ${words}\nconst x = 1;\n`;
+      writeFileSync(filePath, original);
+
+      const exitCode = runCli(['--report-overwidth', filePath], scratchDir);
+
+      expect(exitCode).toBe(0);
+      const output = stdout.join('');
+      expect(output).toContain('has-pipe: 1');
+    });
+  });
+
   describe('config surface', () => {
     test('honors a comment-fmt.json maxLength override', () => {
       writeFileSync(join(scratchDir, 'comment-fmt.json'), JSON.stringify({maxLength: 40, targetLength: 35}));

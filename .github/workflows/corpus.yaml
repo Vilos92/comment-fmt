@@ -1,0 +1,92 @@
+name: Differential Corpus
+
+# Weekly and manual only, deliberately not on push/pull_request (plan §9.3: "it's slow and it's a
+# net, not a gate"). This job clones 15 real-world OSS repos fresh and runs the full comment
+# formatter against them, which is far too slow and far too noisy (ordinary "files would change"
+# counts are expected and not a failure) to sit in the per-commit path that `continuous-integration.yaml`
+# already covers.
+on:
+  schedule:
+    # Every Monday at 09:00 UTC.
+    - cron: '0 9 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  corpus:
+    runs-on: ubuntu-latest
+    # Cloning 15 repos plus a full-corpus scan is minutes, not seconds. Generous but bounded, so a
+    # genuine hang still fails instead of burning the whole scheduled-job budget indefinitely.
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout comment-fmt
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          persist-credentials: false
+
+      - uses: voidzero-dev/setup-vp@250f29ce396baf5e8f24498e17c0dfdebabc26eb # v1.15.0
+        with:
+          node-version: '24'
+          cache: true
+
+      - run: vp install
+
+      # 15 repos, not the plan's suggested 20-30 (plan §9.3, §14.11): a practical scope reduction
+      # for CI time/resource budget, not an oversight. The five consumer repos
+      # (scriptlancer, greglinscheid.com, vilos92.com, gdex, grynthia.cat) are deliberately excluded
+      # here too: those are separate private/personal repos this job has no credentials or business
+      # cloning, and that half of §9.3's corpus is run manually/locally instead.
+      - name: Clone corpus repos
+        run: |
+          mkdir -p corpus
+          for repo in \
+            microsoft/TypeScript \
+            vuejs/core \
+            rollup/rollup \
+            vitejs/vite \
+            eslint/eslint \
+            facebook/react \
+            sveltejs/svelte \
+            prettier/prettier \
+            webpack/webpack \
+            babel/babel \
+            lodash/lodash \
+            expressjs/express \
+            colinhacks/zod \
+            date-fns/date-fns \
+            jestjs/jest \
+          ; do
+            name=$(basename "$repo")
+            git clone --depth 1 "https://github.com/${repo}.git" "corpus/${name}"
+          done
+
+      - name: Run differential corpus scan
+        id: corpus-scan
+        run: |
+          set +e
+          bun test/corpus/run.ts corpus/* > corpus-output.txt 2>&1
+          echo "exit_code=$?" >> "$GITHUB_OUTPUT"
+          cat corpus-output.txt
+
+      - name: Write job summary
+        if: always()
+        run: |
+          {
+            echo "## Differential corpus scan"
+            echo
+            echo '```'
+            cat corpus-output.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      # Fails the job loudly only on a code-invariance violation (`run.ts` exits 1 in that case,
+      # 0 otherwise). An ordinary "files would change" count is expected and must NOT fail the
+      # build (plan §9.3: this is a net, not a gate).
+      - name: Fail on code-invariance violation
+        if: ${{ steps.corpus-scan.outputs.exit_code != '0' }}
+        run: |
+          echo "::error::Code-invariance violation(s) found. See the job summary for details."
+          exit 1
