@@ -64,10 +64,20 @@ for (const lang of LANGS) {
         const input = readFileSync(fixtureCase.inputPath, 'utf8');
         const actual = format(input, lang);
 
-        if (UPDATE_SNAPSHOTS || !existsSync(fixtureCase.expectedPath)) {
+        if (UPDATE_SNAPSHOTS) {
           mkdirSync(dirname(fixtureCase.expectedPath), {recursive: true});
           writeFileSync(fixtureCase.expectedPath, actual);
           return;
+        }
+
+        // A missing `.expected` file outside update mode must fail, not silently write one and
+        // then pass against what it just wrote -- that would accept any input with no reviewed
+        // golden file to catch a regression against.
+        if (!existsSync(fixtureCase.expectedPath)) {
+          throw new Error(
+            `Missing expected fixture: ${fixtureCase.expectedPath}\n` +
+              'Run `UPDATE_SNAPSHOTS=1 vp test` to generate it, review the output, then commit it.'
+          );
         }
 
         const expected = readFileSync(fixtureCase.expectedPath, 'utf8');
