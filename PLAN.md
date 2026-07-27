@@ -18,8 +18,8 @@ change to reflect progress -- this section is the only part that does.
 | 1 -- Scaffold            | done        | [PR #1](https://github.com/Vilos92/comment-fmt/pull/1) |
 | 2 -- Core + JS lexer     | done        | [PR #2](https://github.com/Vilos92/comment-fmt/pull/2) |
 | 3 -- CLI                 | done        | [PR #3](https://github.com/Vilos92/comment-fmt/pull/3) |
-| 4 -- Differential corpus | in this PR  | [PR #4](https://github.com/Vilos92/comment-fmt/pull/4) |
-| 5 -- Block reshape       | not started |                                                        |
+| 4 -- Differential corpus | done        | [PR #4](https://github.com/Vilos92/comment-fmt/pull/4) |
+| 5 -- Block reshape       | in this PR  | [PR #5](https://github.com/Vilos92/comment-fmt/pull/5) |
 | 6 -- CSS + HTML lexers   | not started |                                                        |
 | 7 -- Rollout and tuning  | not started |                                                        |
 | 8 -- Astro               | unscheduled | not committed to; see §4, §12                          |
@@ -36,17 +36,35 @@ pre-commit hook wiring (§11, "consumer zero"). It also closed a gap left over f
 `format()` now honors the file-level, preceding-line, and inline forms for real. `npm publish` itself
 remains a manual step outside any PR (requires an interactive one-time password).
 
-**PR #4 (this one) finishes** §12 Phase 4's scope: `test/corpus/run.ts` (a differential-testing
-harness checking the §9.1.4 code-invariance property over real code, not synthetic fixtures), a
+**PR #4** finished §12 Phase 4's scope: `test/corpus/run.ts` (a differential-testing harness
+checking the §9.1.4 code-invariance property over real code, not synthetic fixtures), a
 `--report-overwidth` CLI mode for the §9.3/§8.3 structure-taxonomy sampling pass, and a weekly
 scheduled-only CI workflow over 15 cloned OSS repos (a documented scope reduction from the plan's
 suggested 20-30). Run manually against those 15 repos plus the five consumer repos and their
-`node_modules` (589,350 files total): zero code-invariance violations. Two real, previously-hidden
-bugs surfaced by that run and are now fixed with regression fixtures: a protected directive or
-structural marker (an `eslint-disable` comment, a lone fenced-code marker, an `@example` tag) could
-lose its original spacing, or a single-line block comment could get force-split into a spurious
-multi-line opener-plus-closer shape, whenever it was over `maxLength` but its content turned out to
-be unwrappable. 84 fixture pairs live under `test/fixtures/js/` as of this PR.
+`node_modules` (589,350 files): zero code-invariance violations, both then and after every
+subsequent phase's own re-run of the same scan. A CodeRabbit review pass also caught a real
+positional-matching flaw in `--report-overwidth` (a wrapped `//` comment legitimately becomes
+multiple comments once re-lexed, since each physical line starts its own `//`) that's fixed as of
+that PR's final commit.
+
+**PR #5 (this one) finishes** §12 Phase 5's scope: `core/reshape.ts` implements the two-threshold
+hysteresis (`singleLineMaxWidth` / `forceMultilineMinWidth`) that decides whether a block comment
+collapses to one physical line or expands to the multi-line starred form, per §1's block-shape
+rule -- which, until this PR, was only partly enforced: a comment expanding from single-line still
+put its first content word directly on the `/**`/`/*` line. Every block comment now runs through
+`reflowBlockComment` unconditionally, even ones that already fit line-by-line, since fitting isn't
+the same question as already having the right shape. The 589,350-file corpus re-run this phase
+surfaced two more real, previously-unreachable bugs (unreachable before this phase started
+processing every block comment, not just overflowing ones), both fixed with regression fixtures: a
+missing leading-blank-line special case that blocked collapse for completely ordinary short JSDoc
+comments, and a serious one from the corpus scan itself -- a continuation prefix without a trailing
+space (some files use `' *'`, not `' * '`) concatenated directly against content starting with `/`
+(an embedded `// example` line inside a larger comment's prose) formed a literal `*/` and
+prematurely closed the comment, corrupting the file. A self-review pass caught two further issues
+before this PR opened: already-fitting, non-collapsible comments losing meaningful trailing
+whitespace to an unconditional `.trimEnd()`, and the two reshape thresholds silently producing
+nonsensical behavior if a caller passed them in the wrong order relative to each other (now a clear
+thrown error). 90 fixture pairs live under `test/fixtures/js/` as of this PR.
 
 **Once Phase 7 lands, delete this file** -- and before deleting it, sweep every `(plan §N)` citation out
 of the codebase's comments first. It's a handoff document for building the tool, not permanent project

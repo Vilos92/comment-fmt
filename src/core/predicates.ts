@@ -1,6 +1,4 @@
-/*
- * Constants.
- */
+/* Constants. */
 
 /**
  * Directives that must never be reflowed, even when they overflow. Wrapping one changes its
@@ -74,9 +72,7 @@ const RUN_OF_SPACES = / {2,}/g;
 
 const MIN_ALIGNED_LINES = 3;
 
-/*
- * Entry.
- */
+/* Entry. */
 
 /**
  * `true` if `line` starts (after trimming) with a known tool directive, or one from
@@ -143,9 +139,7 @@ export function checkIsTableLike(lines: readonly string[]): boolean {
   );
 }
 
-/*
- * Helpers.
- */
+/* Helpers. */
 
 function checkHasGfmDelimiterRow(lines: readonly string[]): boolean {
   for (let i = 1; i < lines.length; i += 1) {
@@ -179,12 +173,20 @@ function checkHasAlignedColumns(lines: readonly string[], char: string): boolean
   return [...countByColumn.values()].some(count => count >= MIN_ALIGNED_LINES);
 }
 
-/** `true` if a run of 2+ spaces lands on the same column in `MIN_ALIGNED_LINES`+ lines. */
+/**
+ * `true` if a run of 2+ spaces ends at the same column (where the next token starts) in
+ * `MIN_ALIGNED_LINES`+ lines. Checked by the run's end, not its start: a hand-aligned key-value
+ * table pads each key to the same total width, so the value column lines up even though the space
+ * run itself starts at a different column per line (`name` + 4 spaces vs `age` + 5 spaces, both
+ * landing the value at column 8). Checking only the start column, as an earlier version of this
+ * function did, missed exactly this shape and let it fall through to being reflowed like ordinary
+ * prose, destroying the alignment.
+ */
 function checkHasAlignedSpaceRuns(lines: readonly string[]): boolean {
   const countByColumn = new Map<number, number>();
   for (const line of lines) {
     for (const match of line.matchAll(RUN_OF_SPACES)) {
-      const column = match.index;
+      const column = match.index + match[0].length;
       countByColumn.set(column, (countByColumn.get(column) ?? 0) + 1);
     }
   }
