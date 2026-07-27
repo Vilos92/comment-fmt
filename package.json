@@ -33,14 +33,14 @@
   },
   "scripts": {
     "build": "vp pack",
+    "check": "vp check",
     "dev": "vp pack --watch",
     "fmt:check": "vp fmt --check",
     "lint": "vp lint",
-    "typecheck": "vp check --no-fmt --no-lint",
-    "test": "vp test",
-    "check": "vp check",
+    "prepare": "vp config",
     "prepublishOnly": "vp run build",
-    "prepare": "vp config"
+    "test": "vp test",
+    "typecheck": "vp check --no-fmt --no-lint"
   },
   "devDependencies": {
     "@types/node": "^26.1.1",
