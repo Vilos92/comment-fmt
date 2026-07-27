@@ -28,7 +28,7 @@ export type Block = {
 const LIST_MARKER = /^\s*([-*+]|\d+[.)])\s/;
 
 /*
- * Script.
+ * Entry.
  */
 
 /**
@@ -112,9 +112,9 @@ export function splitIntoBlocks(lines: readonly string[], extraDirectives: reado
     current.push(line);
   }
 
-  // An unterminated fence or a trailing @example with no following boundary still needs its
+  // An unterminated fence or a trailing `@example` with no following boundary still needs its
   // content preserved. Treat it as protected rather than let it fall through to the generic
-  // flush below and get reflowed.
+  // `flush` below and get reflowed.
   if (inFence || inExample) {
     blocks.push({lines: current, protected: true});
     return blocks;

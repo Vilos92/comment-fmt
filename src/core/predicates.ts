@@ -64,7 +64,7 @@ const RUN_OF_SPACES = / {2,}/g;
 const MIN_ALIGNED_LINES = 3;
 
 /*
- * Script.
+ * Entry.
  */
 
 /**

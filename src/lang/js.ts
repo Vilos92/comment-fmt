@@ -99,7 +99,7 @@ const RADIX_DIGIT_BY_PREFIX = new Map([
 ]);
 
 /*
- * Script.
+ * Entry.
  */
 
 /**
@@ -125,7 +125,7 @@ export function findComments(source: string): Comment[] {
   const n = source.length;
   const templateStack: TemplateFrame[] = [];
   let lastCategory: TokenCategory = 'expr-start';
-  // Property names can be any identifier, including a word in EXPR_START_KEYWORDS. For example,
+  // Property names can be any identifier, including a word in `EXPR_START_KEYWORDS`. For example,
   // `x.return / 2` is valid, unambiguous division. Without this, a member access on a
   // reserved-word-shaped property name would misclassify the following `/` as a regex start.
   let afterDot = false;
@@ -182,7 +182,7 @@ export function findComments(source: string): Comment[] {
         afterDot = false;
         continue;
       }
-      // Not a valid regex on this line (see scanRegex). Fall through to generic handling below,
+      // Not a valid regex on this line (see `scanRegex`). Fall through to generic handling below,
       // which treats the '/' as a division/operator punctuator.
     }
 

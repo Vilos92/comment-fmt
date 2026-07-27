@@ -57,7 +57,9 @@ Section markers are **multi-line block comments** (sentence-case label + period)
 Do **not** collapse these to single-line `/* Types. */`. Skip markers entirely on lean single-export files where they'd add ceremony only. Order (omit unused; no empty **Types.** / **Helpers.**):
 
 1. **Types.** · **Constants.**
-2. Entry — the module's primary export, or **Config.** for `vite.config.ts`
+2. **Entry.** for the module's primary export, or **Config.** for `vite.config.ts`. Not **Script.** /
+   **Component.** / **Styles.** — those are scriptlancer/greglinscheid.com labels for browser bootstrap
+   files, Preact components, and vanilla-extract stylesheets, none of which this project has.
 3. **Helpers.** — always last
 
 **Tests:** the same markers apply once a test file has real structure (arbitraries/generators, shared helper functions, fixtures) beyond a single `describe`/`test` block. **Constants.** (generators, fixtures) → **Script.** or **Tests.** (the `describe`/`test` bodies) → **Helpers.**. A short, single-purpose test file can skip markers the same as any other lean file.

@@ -2,13 +2,19 @@
 // containing one comment with a randomly generated body, rather than fully arbitrary strings.
 // Most arbitrary strings aren't meaningfully JS-shaped, and these properties are about how the
 // formatter treats realistic comment content, not about surviving parser-level garbage (the
-// fixture corpus in test/fixtures/js covers targeted adversarial/degenerate cases instead).
+// fixture corpus in `test/fixtures/js` covers targeted adversarial/degenerate cases instead).
 import fc from 'fast-check';
 import {describe, expect, test} from 'vite-plus/test';
 
 import {checkIsTableLike} from '../../src/core/predicates.ts';
 import {format} from '../../src/index.ts';
 import {findComments} from '../../src/lang/js.ts';
+
+/*
+ * Types.
+ */
+
+type CommentKind = 'line' | 'block-single' | 'block-multi';
 
 /*
  * Constants.
@@ -28,8 +34,6 @@ const commentWordsArb = fc.array(fc.oneof({weight: 4, arbitrary: wordArb}, {weig
   minLength: 1,
   maxLength: 60
 });
-
-type CommentKind = 'line' | 'block-single' | 'block-multi';
 
 const commentKindArb = fc.constantFrom('line', 'block-single', 'block-multi') as fc.Arbitrary<CommentKind>;
 

@@ -19,7 +19,7 @@ export type WrapOptions = {
 };
 
 /*
- * Script.
+ * Entry.
  */
 
 /**
@@ -135,9 +135,9 @@ function applyOrphanGuard(lines: readonly string[], maxBudget: number, orphanMin
 
   const rebalanced = rebalanceIntoLines(windowWords, windowSize, maxBudget);
   if (!rebalanced) {
-    // No split into exactly `windowSize` lines exists within maxBudget. Shouldn't happen in
+    // No split into exactly `windowSize` lines exists within `maxBudget`. Shouldn't happen in
     // practice (the window's own original lines are always themselves a valid witness), but this
-    // is core/, so fail safe and leave the greedy fill's own split alone rather than assume that
+    // is `core/`, so fail safe and leave the greedy fill's own split alone rather than assume that
     // invariant holds forever.
     return [...lines];
   }
@@ -179,7 +179,7 @@ function rebalanceIntoLines(
     return slack * slack;
   }
 
-  // cost[k][i]: minimum total cost of placing words[0..i) onto exactly k lines. breakAt[k][i]:
+  // `cost[k][i]`: minimum total cost of placing words[0..i) onto exactly k lines. `breakAt[k][i]`:
   // the start index of that arrangement's final line, for reconstructing the split afterward.
   const cost: number[][] = Array.from({length: numLines + 1}, () =>
     new Array(n + 1).fill(Number.POSITIVE_INFINITY)

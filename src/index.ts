@@ -20,7 +20,7 @@ export type FormatOptions = WrapOptions;
 const DEFAULT_BLOCK_PREFIX = '* ';
 
 /*
- * Script.
+ * Entry.
  */
 
 /**
@@ -101,7 +101,7 @@ function reflowBlockComment(comment: Comment, raw: string, options: FormatOption
   // A comment already spanning multiple physical lines carries its own detected `linePrefix`
   // (full leading whitespace already included, per `computeLinePrefix` in lang/js.ts). One that's
   // only overflowing now, and must expand from single-line, has no such line to detect a
-  // convention from. Synthesize one aligned under the comment's second character (DEFAULT_BLOCK_PREFIX).
+  // convention from. Synthesize one aligned under the comment's second character (`DEFAULT_BLOCK_PREFIX`).
   const continuationPrefix = wasSingleLine
     ? `${' '.repeat(comment.indent + 1)}${DEFAULT_BLOCK_PREFIX}`
     : comment.linePrefix || `${' '.repeat(comment.indent + 1)}${DEFAULT_BLOCK_PREFIX}`;
@@ -117,7 +117,7 @@ function reflowBlockComment(comment: Comment, raw: string, options: FormatOption
   // `comment.indent + comment.open.length`, not `continuationPrefix`'s. They're equal for
   // aligned JSDoc-style comments (`/**` is 3 columns, ` * ` is 3 columns) but diverge for e.g. a
   // `/***`-opened comment (4 columns) against a synthesized ` * ` continuation (3 columns).
-  // wrap() takes one uniform budget for the whole call, so use whichever of the two is larger:
+  // `wrap()` takes one uniform budget for the whole call, so use whichever of the two is larger:
   // never smaller than line 0 needs (so it can't push line 0 over maxLength), and continuation
   // lines wrap very slightly earlier than strictly required in the rare case they diverge. This is safe
   // in both directions.

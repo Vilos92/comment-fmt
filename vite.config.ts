@@ -42,7 +42,7 @@ export default defineConfig({
       // Gates the explicit `.ts` import-suffix convention required by nodenext resolution.
       'import/extensions': ['error', 'ignorePackages']
     },
-    // Same reasoning as fmt.ignorePatterns: fixture content isn't held to house lint/type rules.
+    // Same reasoning as `fmt.ignorePatterns`: fixture content isn't held to house lint/type rules.
     ignorePatterns: ['test/fixtures/**']
   }
 });

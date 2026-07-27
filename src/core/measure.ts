@@ -1,7 +1,3 @@
-/*
- * Measure.
- */
-
 /**
  * Display width of a line, in columns.
  *
