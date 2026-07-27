@@ -25,11 +25,11 @@ const FIXTURES_DIR = fileURLToPath(new URL('./fixtures', import.meta.url));
 const INPUT_MARKER = '.input.';
 const UPDATE_SNAPSHOTS = process.env.UPDATE_SNAPSHOTS === '1';
 
-interface FixtureCase {
+type FixtureCase = {
   name: string;
   inputPath: string;
   expectedPath: string;
-}
+};
 
 function discoverFixtures(lang: Lang): FixtureCase[] {
   const dir = join(FIXTURES_DIR, lang);

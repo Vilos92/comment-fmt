@@ -10,7 +10,7 @@ export type CommentKind = 'line' | 'block';
  * never re-derives anything from raw source, so every field a reflow decision needs must live
  * here.
  */
-export interface Comment {
+export type Comment = {
   readonly kind: CommentKind;
   /** Opening delimiter as it appears in source: `//` or a run of `/` and `*` characters. */
   readonly open: string;
@@ -33,4 +33,4 @@ export interface Comment {
   /** `true` when nothing but whitespace precedes the comment on its source line (as opposed to
    * trailing a statement, e.g. `const x = 1; // trailing`). */
   readonly ownLine: boolean;
-}
+};

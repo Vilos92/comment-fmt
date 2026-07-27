@@ -12,12 +12,12 @@ import {measure} from './measure.ts';
  * Types.
  */
 
-export interface WrapOptions {
+export type WrapOptions = {
   readonly maxLength?: number;
   readonly targetLength?: number;
   readonly orphanMinRatio?: number;
   readonly extraDirectives?: readonly string[];
-}
+};
 
 /*
  * Script.

@@ -10,10 +10,10 @@ import {isDirective, isExampleTag, isFenceLine, isTableLike, isTagLine} from './
  * passed through unchanged, matching the plan §7 step 0 gate's "if uncertain, don't touch it"
  * bias at block scope instead of whole-comment scope.
  */
-export interface Block {
+export type Block = {
   readonly lines: readonly string[];
   readonly protected: boolean;
-}
+};
 
 /*
  * Constants.
