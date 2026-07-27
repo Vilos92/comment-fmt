@@ -19,6 +19,12 @@ Docs are local at `node_modules/vite-plus/docs` or online at https://viteplus.de
 
 Living conventions for this repo. Ask whether new habits belong here vs `README.md`.
 
+`PLAN.md` is the architecture and phasing source of truth -- code comments citing "plan §N" mean that
+document. Check it before proposing a structural change or re-deriving something it already settled.
+**Once the tool is operational (`PLAN.md`'s own Status section tracks this), delete it** and sweep every
+`plan §N` citation out of the codebase's comments first, rewriting each into the rationale it was standing
+in for. It's a handoff document for building the tool, not permanent project documentation.
+
 ## Toolchain
 
 **Bun-first** for installs and `package.json` scripts (`bun install`, `bun run …`, `bunx …`). Day-to-day tooling is **`vp`** per the Vite+ section above. Prefer the Bun (or `vp`) equivalent when upstream docs show `npm` / `pnpm` / `npx`.
@@ -48,11 +54,15 @@ Section markers are **multi-line block comments** (sentence-case label + period)
  */
 ```
 
-Skip markers on lean single-export files where they'd add ceremony only. Order (omit unused; no empty **Types.** / **Helpers.**):
+Do **not** collapse these to single-line `/* Types. */`. Skip markers entirely on lean single-export files where they'd add ceremony only. Order (omit unused; no empty **Types.** / **Helpers.**):
 
 1. **Types.** · **Constants.**
-2. Entry — the module's primary export, or **Config.** for `vite.config.ts`
+2. **Entry.** for the module's primary export, or **Config.** for `vite.config.ts`. Not **Script.** /
+   **Component.** / **Styles.** — those are scriptlancer/greglinscheid.com labels for browser bootstrap
+   files, Preact components, and vanilla-extract stylesheets, none of which this project has.
 3. **Helpers.** — always last
+
+**Tests:** the same markers apply once a test file has real structure (arbitraries/generators, shared helper functions, fixtures) beyond a single `describe`/`test` block. **Constants.** (generators, fixtures) → **Script.** or **Tests.** (the `describe`/`test` bodies) → **Helpers.**. A short, single-purpose test file can skip markers the same as any other lean file.
 
 ## Code style
 
@@ -64,15 +74,16 @@ Skip markers on lean single-export files where they'd add ceremony only. Order (
 
 - **Why over what.** Drop comments that only restate mechanics the code already shows.
 - **State intent positively.** Prefer `// ensures Y` over `// prevents X` when the code already makes X impossible.
-- **Layer once.** Put shared why on a constant, type field, or entry closure — don't repeat it at every call site.
-- **A comment carries its own why** — never just a pointer to this file or other contributor docs. Referencing other code (a sibling function, a fixture) is fine.
-- **JSDoc** on exports and non-trivial helpers when the contract isn't obvious; often one crisp line is enough. Don't document module-private types.
+- **Layer once.** Put shared why on a constant, type field, or entry closure. Don't repeat it at every call site.
+- **A comment carries its own why**, never just a pointer to this file or other contributor docs. Referencing other code (a sibling function, a fixture) is fine.
+- **JSDoc** on exports and non-trivial helpers when the contract isn't obvious. Often one crisp line is enough. Don't document module-private types.
 - In prose, backtick **identifiers** (`targetLength`), not section headers.
+- **Default to separate sentences over semicolons or em dashes joining clauses.** Either is fine occasionally for a tight parenthetical, but overuse gives the codebase a heavy editorial voice.
 
 ## Naming
 
 - **Booleans:** predicate prefixes (`is`, `has`, `should`, `can`, …) for locals, params, and fields — not bare adjectives or state nouns.
-- **Boolean-returning functions:** name them so the call reads as a question (`isUrl`, `hasFence`). Prefer `is` / `has` / `can` / `should` over `getIs…`, which reads like a stored-flag accessor.
+- **Boolean-returning functions:** name them so the call reads as a question (`canApply`, `checkIsUrl`). Prefer `can` / `check` / `should` over `getIs…`, which reads like a stored-flag accessor. Reserve bare `is` / `has` on functions for real TypeScript type guards (`x is Foo` return types) only; a plain boolean-returning check gets `checkIsX` / `checkHasX` instead.
 - **`compute` / `calc`** for calculated non-boolean results.
 - **Locals:** readable names, not `e` / `x` unless scope is tiny.
 - **Name for what a thing is, not where it lives.** When a folder or module already conveys context, don't restate it as an identifier prefix.
