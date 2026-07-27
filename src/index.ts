@@ -21,6 +21,29 @@ export type FormatOptions = WrapOptions;
  */
 const DEFAULT_BLOCK_PREFIX = '* ';
 
+/**
+ * File-level escape hatch (plan §8.4): honored only within a file's first `IGNORE_FILE_LINE_WINDOW`
+ * physical lines, so a stray mention deep in a long file can't silently opt the whole file out.
+ * `\b` after the literal keeps a hypothetical `comment-fmt-ignore-fileX` from matching.
+ */
+const IGNORE_FILE_MARKER = /comment-fmt-ignore-file\b/;
+
+const IGNORE_FILE_LINE_WINDOW = 5;
+
+/**
+ * Per-comment escape hatch (plan §8.4): matches `comment-fmt-ignore` wherever it appears in a
+ * comment's body, for both the inline form (skip this comment) and as the whole content of a
+ * preceding standalone comment (skip the next one). Excludes `comment-fmt-ignore-file` so that
+ * marker, found outside its line window, doesn't also register as this one.
+ */
+const IGNORE_MARKER = /comment-fmt-ignore(?!-file)\b/;
+
+/**
+ * A standalone comment whose entire (trimmed) content is exactly this, optionally followed by a
+ * `-- reason` or `: reason` that the tool ignores, is the preceding-line form of the escape hatch.
+ */
+const IGNORE_MARKER_WHOLE_COMMENT = /^comment-fmt-ignore(\s*(--|:)\s*\S.*)?$/;
+
 /*
  * Entry.
  */
@@ -33,16 +56,24 @@ const DEFAULT_BLOCK_PREFIX = '* ';
  * A comment whose every physical line already fits is returned completely untouched, not just
  * "unchanged content re-serialized the same way." This function slices the original source
  * around comments it doesn't need to touch, rather than reconstructing them, so there's no path
- * by which reflow logic could introduce a whitespace difference in already-fitting content.
+ * by which reflow logic could introduce a whitespace difference in already-fitting content. The
+ * same applies, unconditionally, to any comment covered by the plan §8.4 escape hatch below.
  */
 export function format(source: string, options: FormatOptions = {}): string {
   const comments = findComments(source);
+  if (checkHasFileIgnore(source, comments)) {
+    return source;
+  }
+
   let result = source;
 
   // Reverse order: replacing a later comment first keeps every earlier comment's [start, end)
   // offsets, computed against the original `source`, valid against `result` at each step.
   for (let i = comments.length - 1; i >= 0; i -= 1) {
     const comment = comments[i] as Comment;
+    if (checkIsIgnored(source, comments, i)) {
+      continue;
+    }
     const replacement = reflowComment(source, comment, options);
     result = result.slice(0, comment.start) + replacement + result.slice(comment.end);
   }
@@ -53,6 +84,69 @@ export function format(source: string, options: FormatOptions = {}): string {
 /*
  * Helpers.
  */
+
+/**
+ * `true` if a `comment-fmt-ignore-file` marker (plan §8.4) itself sits within the file's first
+ * `IGNORE_FILE_LINE_WINDOW` lines. Checked once, up front, so a matching file short-circuits to a
+ * straight return rather than being walked comment by comment for no reason.
+ *
+ * Locates the marker text's own offset inside the comment, not just the comment's start: a
+ * multi-line block comment can start within the window while the marker itself sits many lines
+ * deeper in its body, and gating on the comment's start line alone would let that comment carry
+ * the marker arbitrarily far into the file, well outside the window the marker is supposed to be
+ * confined to.
+ */
+function checkHasFileIgnore(source: string, comments: readonly Comment[]): boolean {
+  for (const comment of comments) {
+    const content = rawContentOf(source, comment);
+    const match = IGNORE_FILE_MARKER.exec(content);
+    if (!match) {
+      continue;
+    }
+    const markerOffset = comment.start + comment.open.length + match.index;
+    if (lineOf(source, markerOffset) < IGNORE_FILE_LINE_WINDOW) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * `true` if `comments[index]` is covered by the per-comment escape hatch (plan §8.4): either the
+ * marker appears inline in its own body, or the comment immediately before it is a standalone
+ * `comment-fmt-ignore` marker with nothing but a single line break between the two. The adjacency
+ * check is deliberately strict (no blank line permitted) to match how directive comments like
+ * `eslint-disable-next-line` are conventionally read: applying to the very next line, not "soon".
+ */
+function checkIsIgnored(source: string, comments: readonly Comment[], index: number): boolean {
+  const comment = comments[index] as Comment;
+  if (IGNORE_MARKER.test(rawContentOf(source, comment))) {
+    return true;
+  }
+
+  const previous = comments[index - 1];
+  if (!previous || !previous.ownLine) {
+    return false;
+  }
+  if (!IGNORE_MARKER_WHOLE_COMMENT.test(rawContentOf(source, previous).trim())) {
+    return false;
+  }
+  return /^[ \t]*\n[ \t]*$/.test(source.slice(previous.end, comment.start));
+}
+
+function rawContentOf(source: string, comment: Comment): string {
+  return source.slice(comment.start + comment.open.length, comment.end - comment.close.length);
+}
+
+function lineOf(source: string, offset: number): number {
+  let line = 0;
+  for (let i = 0; i < offset; i += 1) {
+    if (source[i] === '\n') {
+      line += 1;
+    }
+  }
+  return line;
+}
 
 function reflowComment(source: string, comment: Comment, options: FormatOptions): string {
   const raw = source.slice(comment.start, comment.end);
