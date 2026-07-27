@@ -24,9 +24,12 @@ export const DEFAULT_TARGET_LENGTH = 105;
  */
 export const DEFAULT_ORPHAN_MIN_RATIO = 0.3;
 
-/** Secondary orphan-guard floor: never pull from a previous line with one word or fewer, since a
- * single long token (e.g. "internationalization") isn't an orphan-guard candidate. */
-export const ORPHAN_GUARD_MIN_WORDS = 2;
-
-/** Orphan guard stops after this many word-moves even if the final line is still short. */
-export const ORPHAN_GUARD_MAX_MOVES = 2;
+/**
+ * How many trailing lines the orphan guard re-lays out when the final line is a short orphan.
+ * Bigger windows make the touched lines more evenly filled among themselves, at the cost of a more
+ * visible step down from the untouched lines right before the window. 3 tested as the sweet spot
+ * during design: 2 doesn't fully fix the worst orphans (a single tiny trailing word barely moves
+ * the needle), 4+ starts trading a bigger cliff for evenness gains that are hard to see. Same
+ * empirical-tuning status as `DEFAULT_ORPHAN_MIN_RATIO` above.
+ */
+export const ORPHAN_GUARD_WINDOW_LINES = 3;

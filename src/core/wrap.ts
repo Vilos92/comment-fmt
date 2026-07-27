@@ -3,8 +3,7 @@ import {
   DEFAULT_MAX_LENGTH,
   DEFAULT_ORPHAN_MIN_RATIO,
   DEFAULT_TARGET_LENGTH,
-  ORPHAN_GUARD_MAX_MOVES,
-  ORPHAN_GUARD_MIN_WORDS
+  ORPHAN_GUARD_WINDOW_LINES
 } from './constants.ts';
 import {measure} from './measure.ts';
 
@@ -107,37 +106,118 @@ function greedyFill(words: readonly string[], targetBudget: number, maxBudget: n
   return filledLines;
 }
 
-/** Moves a trailing word from the second-to-last line onto a too-short final line, up to
- * `ORPHAN_GUARD_MAX_MOVES` times, as long as doing so keeps every line within `maxBudget` and the
- * donor line still has more than one word left (plan §7 step 3). */
+/**
+ * When the final line is a short orphan, re-lays out just the last `ORPHAN_GUARD_WINDOW_LINES`
+ * lines (or fewer, if the block is shorter) to split their pooled words more evenly, instead of
+ * leaving the rest of the greedy fill's tight packing untouched. Lines before the window are
+ * never read or rewritten. That's what keeps this local in the same sense greedy fill is local: a
+ * change far from the end of a long comment can only affect lines from that point forward, never
+ * lines before it, and this step can only ever narrow that already-forward-only blast radius
+ * further, down to a small fixed window at the very end (plan §7 step 3).
+ */
 function applyOrphanGuard(lines: readonly string[], maxBudget: number, orphanMinRatio: number): string[] {
-  const result = [...lines];
-  let moves = 0;
-
-  while (moves < ORPHAN_GUARD_MAX_MOVES && result.length >= 2) {
-    const lastIndex = result.length - 1;
-    const lastLine = result[lastIndex] as string;
-    if (measure(lastLine) >= maxBudget * orphanMinRatio) {
-      break;
-    }
-
-    const prevIndex = lastIndex - 1;
-    const prevWords = (result[prevIndex] as string).split(' ');
-    if (prevWords.length < ORPHAN_GUARD_MIN_WORDS) {
-      break;
-    }
-
-    const movedWord = prevWords[prevWords.length - 1] as string;
-    const newPrevLine = prevWords.slice(0, -1).join(' ');
-    const newLastLine = lastLine.length === 0 ? movedWord : `${movedWord} ${lastLine}`;
-    if (measure(newPrevLine) > maxBudget || measure(newLastLine) > maxBudget) {
-      break;
-    }
-
-    result[prevIndex] = newPrevLine;
-    result[lastIndex] = newLastLine;
-    moves += 1;
+  if (lines.length < 2) {
+    return [...lines];
   }
 
+  const lastLine = lines[lines.length - 1] as string;
+  if (measure(lastLine) >= maxBudget * orphanMinRatio) {
+    return [...lines];
+  }
+
+  const windowSize = Math.min(lines.length, ORPHAN_GUARD_WINDOW_LINES);
+  const windowStart = lines.length - windowSize;
+  const windowWords = lines
+    .slice(windowStart)
+    .join(' ')
+    .split(' ')
+    .filter(word => word.length > 0);
+
+  const rebalanced = rebalanceIntoLines(windowWords, windowSize, maxBudget);
+  if (!rebalanced) {
+    // No split into exactly `windowSize` lines exists within maxBudget. Shouldn't happen in
+    // practice (the window's own original lines are always themselves a valid witness), but this
+    // is core/, so fail safe and leave the greedy fill's own split alone rather than assume that
+    // invariant holds forever.
+    return [...lines];
+  }
+
+  return [...lines.slice(0, windowStart), ...rebalanced];
+}
+
+/**
+ * Finds the partition of `words` into exactly `numLines` lines, each within `maxBudget`, that
+ * minimizes the sum of squared leftover space per line: the most evenly filled split achievable
+ * at that line count. A small, line-count-constrained variant of the classic word-wrap dynamic
+ * program (Knuth & Plass's line-breaking cost function, minus the interword-glue stretch/shrink
+ * modeling that only matters for justified text). `words` here is a handful of lines' worth
+ * pooled together, so this stays cheap even in a pathological all-tiny-words case. Returns
+ * `undefined` if no split into exactly `numLines` lines fits within `maxBudget`.
+ */
+function rebalanceIntoLines(
+  words: readonly string[],
+  numLines: number,
+  maxBudget: number
+): string[] | undefined {
+  const n = words.length;
+  const wordWidths = words.map(word => word.length);
+
+  function lineWidth(start: number, end: number): number {
+    let width = -1; // No leading space before the first word.
+    for (let i = start; i < end; i += 1) {
+      width += (wordWidths[i] as number) + 1;
+    }
+    return width;
+  }
+
+  function lineCost(start: number, end: number): number {
+    const width = lineWidth(start, end);
+    if (width > maxBudget) {
+      return Number.POSITIVE_INFINITY;
+    }
+    const slack = maxBudget - width;
+    return slack * slack;
+  }
+
+  // cost[k][i]: minimum total cost of placing words[0..i) onto exactly k lines. breakAt[k][i]:
+  // the start index of that arrangement's final line, for reconstructing the split afterward.
+  const cost: number[][] = Array.from({length: numLines + 1}, () =>
+    new Array(n + 1).fill(Number.POSITIVE_INFINITY)
+  );
+  const breakAt: number[][] = Array.from({length: numLines + 1}, () => new Array(n + 1).fill(-1));
+  (cost[0] as number[])[0] = 0;
+
+  for (let k = 1; k <= numLines; k += 1) {
+    for (let i = 1; i <= n; i += 1) {
+      for (let j = 0; j < i; j += 1) {
+        const previousCost = (cost[k - 1] as number[])[j] as number;
+        if (previousCost === Number.POSITIVE_INFINITY) {
+          continue;
+        }
+        const total = previousCost + lineCost(j, i);
+        if (total < ((cost[k] as number[])[i] as number)) {
+          (cost[k] as number[])[i] = total;
+          (breakAt[k] as number[])[i] = j;
+        }
+      }
+    }
+  }
+
+  if ((cost[numLines] as number[])[n] === Number.POSITIVE_INFINITY) {
+    return undefined;
+  }
+
+  const breaks: number[] = [n];
+  let index = n;
+  for (let k = numLines; k > 0; k -= 1) {
+    index = (breakAt[k] as number[])[index] as number;
+    breaks.push(index);
+  }
+  breaks.reverse();
+
+  const result: string[] = [];
+  for (let i = 0; i < numLines; i += 1) {
+    result.push(words.slice(breaks[i] as number, breaks[i + 1] as number).join(' '));
+  }
   return result;
 }
