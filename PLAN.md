@@ -8,6 +8,36 @@ strategy with case generation as an explicit, budgeted task (§9).
 
 ---
 
+## Status
+
+Kept up to date as phases land. The rest of this document is the frozen v3 plan itself and doesn't
+change to reflect progress -- this section is the only part that does.
+
+| Phase                    | State       | Where                                                  |
+| ------------------------ | ----------- | ------------------------------------------------------ |
+| 1 -- Scaffold            | done        | [PR #1](https://github.com/Vilos92/comment-fmt/pull/1) |
+| 2 -- Core + JS lexer     | in this PR  | [PR #2](https://github.com/Vilos92/comment-fmt/pull/2) |
+| 3 -- CLI                 | not started |                                                        |
+| 4 -- Differential corpus | not started |                                                        |
+| 5 -- Block reshape       | not started |                                                        |
+| 6 -- CSS + HTML lexers   | not started |                                                        |
+| 7 -- Rollout and tuning  | not started |                                                        |
+
+**PR #2 (this one) finishes** §12 Phase 2's scope: `core/{constants,measure,predicates,blocks,wrap}.ts`
+and `lang/js.ts`, plus `src/index.ts`'s `format()` wired to the real engine in place of the Phase 1
+placeholder. All four §9.1 invariants are verified via fast-check, run manually through `bun` rather
+than `vp test` (see README's "Known issues" -- that's an upstream blocker, not a gap in this PR). 71
+fixture pairs live under `test/fixtures/js/`, covering the plan's verified lexer breakages, the full
+§8.1 directive list, JSDoc tag protection, and every bug found during an ultrareview pass and the
+follow-up design work on the orphan guard's tail-rebalance step.
+
+**Once Phase 7 lands, delete this file.** It's a handoff document for building the tool, not permanent
+project documentation. Once the plan it describes is fully executed, keeping it around only means
+either letting `plan §N` references in code comments go stale, or maintaining a document whose job is
+already finished. `README.md` and the code itself are the source of truth from that point on.
+
+---
+
 ## 1. What we are building
 
 A single npm-published CLI that reformats comments across JavaScript/TypeScript, CSS/SCSS, and HTML,
