@@ -80,29 +80,37 @@ export function checkIsDirective(line: string, extraDirectives: readonly string[
   );
 }
 
-/** ESLint `max-len`'s URL heuristic: a char that isn't `:`/`/`/`?`/`#` immediately before `://`,
+/**
+ * ESLint `max-len`'s URL heuristic: a char that isn't `:`/`/`/`?`/`#` immediately before `://`,
  * followed by a char that isn't `?`/`#`. Loose by design. A false positive just leaves a line
- * unwrapped, which is the safe direction (plan §7 step 0 is the real safety net either way). */
+ * unwrapped, which is the safe direction (plan §7 step 0 is the real safety net either way).
+ */
 export function checkIsUrl(text: string): boolean {
   return /[^:/?#]:\/\/[^?#]/u.test(text);
 }
 
-/** `true` for a JSDoc-style tag line (`@param foo - ...`), after leading whitespace. Tag lines
- * are wrap boundaries in `blocks.ts` and are never merged with surrounding prose. */
+/**
+ * `true` for a JSDoc-style tag line (`@param foo - ...`), after leading whitespace. Tag lines
+ * are wrap boundaries in `blocks.ts` and are never merged with surrounding prose.
+ */
 export function checkIsTagLine(line: string): boolean {
   return line.trimStart().startsWith('@');
 }
 
-/** `true` for a fenced-code boundary (``` ```` ```), which opens or closes a protected region in
+/**
+ * `true` for a fenced-code boundary (``` ```` ```), which opens or closes a protected region in
  * `blocks.ts` as a matched pair. Content between two fence lines is passed through untouched
- * regardless of width, the same way step 0 protects an already-fitting comment. */
+ * regardless of width, the same way step 0 protects an already-fitting comment.
+ */
 export function checkIsFenceLine(line: string): boolean {
   return line.trim().startsWith('```');
 }
 
-/** `true` for an `@example` tag. Unlike a fence, this isn't a matched open/close pair. A second
+/**
+ * `true` for an `@example` tag. Unlike a fence, this isn't a matched open/close pair. A second
  * `@example` starts its own new protected region rather than closing the first one. JSDoc has no
- * closing marker for `@example`. It runs until the next tag or the comment ends. */
+ * closing marker for `@example`. It runs until the next tag or the comment ends.
+ */
 export function checkIsExampleTag(line: string): boolean {
   return line.trim().startsWith('@example');
 }

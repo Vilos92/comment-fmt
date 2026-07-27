@@ -5,8 +5,10 @@
 /** Hard cap. No output line may ever exceed this width. See `wrap.ts` step 0 and step 4. */
 export const DEFAULT_MAX_LENGTH = 110;
 
-/** Soft target the greedy fill wraps toward. Always `<= maxLength`. The gap is deliberate
- * headroom for the orphan guard to move a word without breaking the hard cap. */
+/**
+ * Soft target the greedy fill wraps toward. Always `<= maxLength`. The gap is deliberate
+ * headroom for the orphan guard to move a word without breaking the hard cap.
+ */
 export const DEFAULT_TARGET_LENGTH = 105;
 
 /**

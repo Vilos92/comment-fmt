@@ -260,9 +260,11 @@ function scanString(source: string, start: number, quote: string): number {
   return n;
 }
 
-/** Returns the index one past a regex literal's closing `/` (plus flags), or `undefined` if the
+/**
+ * Returns the index one past a regex literal's closing `/` (plus flags), or `undefined` if the
  * span starting at `start` isn't a valid regex literal (hit a newline before an unescaped close,
- * meaning it wasn't one, since JS regex literals can't contain a raw newline). */
+ * meaning it wasn't one, since JS regex literals can't contain a raw newline).
+ */
 function scanRegex(source: string, start: number): number | undefined {
   const n = source.length;
   let i = start + 1;
@@ -349,8 +351,10 @@ function consumeBigIntSuffix(source: string, i: number): number {
   return source[i] === 'n' ? i + 1 : i;
 }
 
-/** Steps one character of raw template text: `\` escapes, `` ` `` closes the template, `${`
- * opens an interpolation (pushes an `'expr'` frame), anything else is ordinary text. */
+/**
+ * Steps one character of raw template text: `\` escapes, `` ` `` closes the template, `${`
+ * opens an interpolation (pushes an `'expr'` frame), anything else is ordinary text.
+ */
 function stepTemplateText(source: string, i: number, templateStack: TemplateFrame[]): number {
   const ch = source[i];
   if (ch === '\\') {
@@ -367,9 +371,11 @@ function stepTemplateText(source: string, i: number, templateStack: TemplateFram
   return i + 1;
 }
 
-/** Steps a `{` or `}` while inside a template's `${...}` interpolation: nested `{}` (e.g. an
+/**
+ * Steps a `{` or `}` while inside a template's `${...}` interpolation: nested `{}` (e.g. an
  * object literal) is depth-tracked so only the interpolation's own matching `}` pops back to the
- * enclosing template text. */
+ * enclosing template text.
+ */
 function stepTemplateExprBrace(
   ch: string,
   frame: {kind: 'expr'; braceDepth: number},

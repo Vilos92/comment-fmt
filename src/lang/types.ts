@@ -24,13 +24,19 @@ export type Comment = {
   readonly linePrefix: string;
   /** Byte offset of the comment's first character (the start of `open`) in source. */
   readonly start: number;
-  /** Byte offset one past the comment's last character (the end of `close`, or of the last line
-   * for an unterminated block comment). */
+  /**
+   * Byte offset one past the comment's last character (the end of `close`, or of the last line
+   * for an unterminated block comment).
+   */
   readonly end: number;
-  /** 0-based column the comment starts at, i.e. how much leading whitespace precedes `open` on
-   * its source line. Used to compute the width budget available for reflowed content. */
+  /**
+   * 0-based column the comment starts at, i.e. how much leading whitespace precedes `open` on
+   * its source line. Used to compute the width budget available for reflowed content.
+   */
   readonly indent: number;
-  /** `true` when nothing but whitespace precedes the comment on its source line (as opposed to
-   * trailing a statement, e.g. `const x = 1; // trailing`). */
+  /**
+   * `true` when nothing but whitespace precedes the comment on its source line (as opposed to
+   * trailing a statement, e.g. `const x = 1; // trailing`).
+   */
   readonly ownLine: boolean;
 };
