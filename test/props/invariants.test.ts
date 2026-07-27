@@ -6,7 +6,7 @@
 import fc from 'fast-check';
 import {describe, expect, test} from 'vite-plus/test';
 
-import {isTableLike} from '../../src/core/predicates.ts';
+import {checkIsTableLike} from '../../src/core/predicates.ts';
 import {format} from '../../src/index.ts';
 import {findComments} from '../../src/lang/js.ts';
 
@@ -78,7 +78,7 @@ describe('invariants', () => {
         for (const line of out.split('\n')) {
           if (line.length > 110) {
             const words = line.trim().split(/\s+/u).filter(Boolean);
-            const exempt = words.length <= 1 || isTableLike([line]);
+            const exempt = words.length <= 1 || checkIsTableLike([line]);
             expect(exempt).toBe(true);
           }
         }

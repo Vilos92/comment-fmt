@@ -81,7 +81,7 @@ Do **not** collapse these to single-line `/* Types. */`. Skip markers entirely o
 ## Naming
 
 - **Booleans:** predicate prefixes (`is`, `has`, `should`, `can`, …) for locals, params, and fields — not bare adjectives or state nouns.
-- **Boolean-returning functions:** name them so the call reads as a question (`isUrl`, `hasFence`). Prefer `is` / `has` / `can` / `should` over `getIs…`, which reads like a stored-flag accessor.
+- **Boolean-returning functions:** name them so the call reads as a question (`canApply`, `checkIsUrl`). Prefer `can` / `check` / `should` over `getIs…`, which reads like a stored-flag accessor. Reserve bare `is` / `has` on functions for real TypeScript type guards (`x is Foo` return types) only; a plain boolean-returning check gets `checkIsX` / `checkHasX` instead.
 - **`compute` / `calc`** for calculated non-boolean results.
 - **Locals:** readable names, not `e` / `x` unless scope is tiny.
 - **Name for what a thing is, not where it lives.** When a folder or module already conveys context, don't restate it as an identifier prefix.

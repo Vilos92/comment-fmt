@@ -72,7 +72,7 @@ const MIN_ALIGNED_LINES = 3;
  * `extraDirectives` (plan §6 config surface). Operates on a single line, since a directive inside
  * an otherwise-reflowable multi-line block should only protect that one line. See `blocks.ts`.
  */
-export function isDirective(line: string, extraDirectives: readonly string[] = []): boolean {
+export function checkIsDirective(line: string, extraDirectives: readonly string[] = []): boolean {
   const trimmed = line.trim();
   return (
     DIRECTIVE_MARKERS.some(marker => trimmed.startsWith(marker)) ||
@@ -83,27 +83,27 @@ export function isDirective(line: string, extraDirectives: readonly string[] = [
 /** ESLint `max-len`'s URL heuristic: a char that isn't `:`/`/`/`?`/`#` immediately before `://`,
  * followed by a char that isn't `?`/`#`. Loose by design. A false positive just leaves a line
  * unwrapped, which is the safe direction (plan §7 step 0 is the real safety net either way). */
-export function isUrl(text: string): boolean {
+export function checkIsUrl(text: string): boolean {
   return /[^:/?#]:\/\/[^?#]/u.test(text);
 }
 
 /** `true` for a JSDoc-style tag line (`@param foo - ...`), after leading whitespace. Tag lines
  * are wrap boundaries in `blocks.ts` and are never merged with surrounding prose. */
-export function isTagLine(line: string): boolean {
+export function checkIsTagLine(line: string): boolean {
   return line.trimStart().startsWith('@');
 }
 
 /** `true` for a fenced-code boundary (``` ```` ```), which opens or closes a protected region in
  * `blocks.ts` as a matched pair. Content between two fence lines is passed through untouched
  * regardless of width, the same way step 0 protects an already-fitting comment. */
-export function isFenceLine(line: string): boolean {
+export function checkIsFenceLine(line: string): boolean {
   return line.trim().startsWith('```');
 }
 
 /** `true` for an `@example` tag. Unlike a fence, this isn't a matched open/close pair. A second
  * `@example` starts its own new protected region rather than closing the first one. JSDoc has no
  * closing marker for `@example`. It runs until the next tag or the comment ends. */
-export function isExampleTag(line: string): boolean {
+export function checkIsExampleTag(line: string): boolean {
   return line.trim().startsWith('@example');
 }
 
@@ -115,12 +115,12 @@ export function isExampleTag(line: string): boolean {
  * touch the block) whenever a check is inconclusive. A false positive here only costs one
  * unformatted comment, a false negative can destroy hand-aligned content.
  */
-export function isTableLike(lines: readonly string[]): boolean {
+export function checkIsTableLike(lines: readonly string[]): boolean {
   return (
-    hasGfmDelimiterRow(lines) ||
+    checkHasGfmDelimiterRow(lines) ||
     lines.some(line => BOX_DRAWING_CHARS.test(line) || ASCII_BOX_OR_TREE.test(line)) ||
-    hasAlignedColumns(lines, '|') ||
-    hasAlignedSpaceRuns(lines)
+    checkHasAlignedColumns(lines, '|') ||
+    checkHasAlignedSpaceRuns(lines)
   );
 }
 
@@ -128,7 +128,7 @@ export function isTableLike(lines: readonly string[]): boolean {
  * Helpers.
  */
 
-function hasGfmDelimiterRow(lines: readonly string[]): boolean {
+function checkHasGfmDelimiterRow(lines: readonly string[]): boolean {
   for (let i = 1; i < lines.length; i += 1) {
     const delimiterRow = lines[i] as string;
     const headerRow = lines[i - 1] as string;
@@ -150,7 +150,7 @@ function columnsOf(line: string, char: string): number[] {
 }
 
 /** `true` if at least one column position of `char` is shared by `MIN_ALIGNED_LINES`+ lines. */
-function hasAlignedColumns(lines: readonly string[], char: string): boolean {
+function checkHasAlignedColumns(lines: readonly string[], char: string): boolean {
   const countByColumn = new Map<number, number>();
   for (const line of lines) {
     for (const column of columnsOf(line, char)) {
@@ -160,7 +160,7 @@ function hasAlignedColumns(lines: readonly string[], char: string): boolean {
   return [...countByColumn.values()].some(count => count >= MIN_ALIGNED_LINES);
 }
 
-function hasAlignedSpaceRuns(lines: readonly string[]): boolean {
+function checkHasAlignedSpaceRuns(lines: readonly string[]): boolean {
   const countByColumn = new Map<number, number>();
   for (const line of lines) {
     for (const match of line.matchAll(RUN_OF_SPACES)) {

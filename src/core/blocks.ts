@@ -1,4 +1,10 @@
-import {isDirective, isExampleTag, isFenceLine, isTableLike, isTagLine} from './predicates.ts';
+import {
+  checkIsDirective,
+  checkIsExampleTag,
+  checkIsFenceLine,
+  checkIsTableLike,
+  checkIsTagLine
+} from './predicates.ts';
 
 /*
  * Types.
@@ -41,13 +47,13 @@ export function splitIntoBlocks(lines: readonly string[], extraDirectives: reado
 
   const flush = () => {
     if (current.length > 0) {
-      blocks.push({lines: current, protected: isTableLike(current)});
+      blocks.push({lines: current, protected: checkIsTableLike(current)});
       current = [];
     }
   };
 
   for (const line of lines) {
-    if (isFenceLine(line)) {
+    if (checkIsFenceLine(line)) {
       if (!inFence) {
         flush(); // Opening a fence: whatever prose was accumulating is its own block, not part
         // of the fenced one about to start.
@@ -71,7 +77,7 @@ export function splitIntoBlocks(lines: readonly string[], extraDirectives: reado
       // (including another `@example`, which starts its own region rather than closing this one)
       // or a blank line. Close the region here and fall through to process `line` normally below,
       // rather than `continue`, so its own boundary rule (blank/tag/directive/etc.) still applies.
-      if (line.trim() === '' || isTagLine(line)) {
+      if (line.trim() === '' || checkIsTagLine(line)) {
         blocks.push({lines: current, protected: true});
         current = [];
         inExample = false;
@@ -81,7 +87,7 @@ export function splitIntoBlocks(lines: readonly string[], extraDirectives: reado
       }
     }
 
-    if (isExampleTag(line)) {
+    if (checkIsExampleTag(line)) {
       flush();
       inExample = true;
       current.push(line);
@@ -94,13 +100,13 @@ export function splitIntoBlocks(lines: readonly string[], extraDirectives: reado
       continue;
     }
 
-    if (isDirective(line, extraDirectives)) {
+    if (checkIsDirective(line, extraDirectives)) {
       flush();
       blocks.push({lines: [line], protected: true});
       continue;
     }
 
-    if (isTagLine(line) || LIST_MARKER.test(line)) {
+    if (checkIsTagLine(line) || LIST_MARKER.test(line)) {
       flush();
     }
     current.push(line);

@@ -141,7 +141,7 @@ export function findComments(source: string): Comment[] {
 
     const ch = source[i] as string;
 
-    if (isWhitespace(ch)) {
+    if (checkIsWhitespace(ch)) {
       i += 1;
       continue;
     }
@@ -221,7 +221,7 @@ export function findComments(source: string): Comment[] {
  * Helpers.
  */
 
-function isWhitespace(ch: string): boolean {
+function checkIsWhitespace(ch: string): boolean {
   return ch === ' ' || ch === '\t' || ch === '\n' || ch === '\r' || ch === '\v' || ch === '\f';
 }
 
