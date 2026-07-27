@@ -2,13 +2,15 @@
  * Constants.
  */
 
-// Directives that must never be reflowed, even when they overflow. Wrapping one changes its
-// text, and for the tool-directive entries that silently stops the tool from doing anything
-// (e.g. a wrapped `oxlint-disable-next-line some-rule` no longer disables the rule while CI stays
-// green). Matched by prefix against each line's trimmed content, not by substring search
-// anywhere in the comment. `// this mentions eslint-disable in prose` must still wrap, and only
-// a prefix match tells the two apart. `-next-line` / `-disable`-family suffixes don't need
-// separate entries: they share the same prefix as their base directive.
+/**
+ * Directives that must never be reflowed, even when they overflow. Wrapping one changes its
+ * text, and for the tool-directive entries that silently stops the tool from doing anything
+ * (e.g. a wrapped `oxlint-disable-next-line some-rule` no longer disables the rule while CI stays
+ * green). Matched by prefix against each line's trimmed content, not by substring search
+ * anywhere in the comment. `// this mentions eslint-disable in prose` must still wrap, and only
+ * a prefix match tells the two apart. `-next-line` / `-disable`-family suffixes don't need
+ * separate entries: they share the same prefix as their base directive.
+ */
 const DIRECTIVE_MARKERS: readonly string[] = [
   // ESLint / Oxlint.
   'eslint-disable',
@@ -52,7 +54,7 @@ const DIRECTIVE_MARKERS: readonly string[] = [
   'comment-fmt-ignore'
 ];
 
-// GFM table delimiter row: only pipes, colons, dashes, and whitespace, with at least one pipe.
+/** GFM table delimiter row: only pipes, colons, dashes, and whitespace, with at least one pipe. */
 const GFM_DELIMITER_ROW = /^[\s|:-]+$/;
 const HAS_PIPE = /\|/;
 
@@ -168,6 +170,7 @@ function checkHasAlignedColumns(lines: readonly string[], char: string): boolean
   return [...countByColumn.values()].some(count => count >= MIN_ALIGNED_LINES);
 }
 
+/** `true` if a run of 2+ spaces lands on the same column in `MIN_ALIGNED_LINES`+ lines. */
 function checkHasAlignedSpaceRuns(lines: readonly string[]): boolean {
   const countByColumn = new Map<number, number>();
   for (const line of lines) {

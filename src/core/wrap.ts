@@ -82,6 +82,11 @@ function fillBlock(
   return applyOrphanGuard(greedyFill(words, targetBudget, maxBudget), maxBudget, orphanMinRatio);
 }
 
+/**
+ * Packs `words` onto lines, adding one more to the current line as long as doing so stays within
+ * `targetBudget`. `maxBudget` is checked too so the hard cap still holds even if a caller passes
+ * `targetLength > maxLength`; the effective cutoff is always the smaller of the two.
+ */
 function greedyFill(words: readonly string[], targetBudget: number, maxBudget: number): string[] {
   const filledLines: string[] = [];
   let currentWords: string[] = [];

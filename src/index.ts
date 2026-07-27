@@ -14,9 +14,11 @@ export type FormatOptions = WrapOptions;
  * Constants.
  */
 
-// Default continuation-line prefix for a block comment being expanded from single-line to
-// multi-line shape, where there's no existing second line to detect a convention from. Aligns
-// the `*` one column right of the comment's own `/`, matching common JSDoc style.
+/**
+ * Default continuation-line prefix for a block comment being expanded from single-line to
+ * multi-line shape, where there's no existing second line to detect a convention from. Aligns
+ * the `*` one column right of the comment's own `/`, matching common JSDoc style.
+ */
 const DEFAULT_BLOCK_PREFIX = '* ';
 
 /*
@@ -69,6 +71,12 @@ function fitsWithinLimit(raw: string, indent: number, maxLength: number): boolea
   return raw.split('\n').every((line, idx) => measure(line) + (idx === 0 ? indent : 0) <= maxLength);
 }
 
+/**
+ * Reflows a `//` comment: strips the opener and any leading whitespace, wraps the remaining text
+ * with `wrap()`, then re-applies `//` to the first line and `<indent>//` to every continuation
+ * line (a line comment has no per-line decoration of its own to preserve, unlike a block
+ * comment's ` * `).
+ */
 function reflowLineComment(comment: Comment, raw: string, options: FormatOptions): string {
   const content = raw.slice(comment.open.length).replace(/^[ \t]+/, '');
   const prefixWidth = comment.indent + comment.open.length + 1; // Reconstructed as `// `.
@@ -83,6 +91,14 @@ function reflowLineComment(comment: Comment, raw: string, options: FormatOptions
     .join('\n');
 }
 
+/**
+ * Reflows a block comment (`/*`- or `/**`-opened) by extracting its content lines, wrapping them
+ * with `wrap()`, and reassembling the delimiters and continuation prefix around the result.
+ * Handles both an already multi-line comment (reusing its detected `linePrefix`) and one
+ * expanding from single-line for the first time (synthesizing one via `DEFAULT_BLOCK_PREFIX`),
+ * and both a properly terminated comment and an unterminated one (malformed/truncated source,
+ * which has no closing delimiter to reconstruct).
+ */
 function reflowBlockComment(comment: Comment, raw: string, options: FormatOptions): string {
   const terminated = comment.close.length > 0;
   // When terminated, `inner` spans from right after `open` to right before the closing `*/`, so

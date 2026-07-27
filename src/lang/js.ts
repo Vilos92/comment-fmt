@@ -25,19 +25,21 @@ type TemplateFrame = {readonly kind: 'text'} | {readonly kind: 'expr'; braceDept
  * Constants.
  */
 
-// Words after which a `/` starts an expression (regex), not a division. Deliberately limited to
-// words that are *always* reserved (never legal as a plain identifier or property name) in
-// strict-mode/module code, which every JS/TS/JSX/TSX file this tool targets is. Contextual
-// keywords (`async`, `get`, `set`, `of`, `as`, `from`, `type`, `satisfies`, `is`, `override`,
-// etc.) are NOT here even though they're keyword-shaped, because they're also completely legal
-// identifiers (`const async = 1; async / 2` is real, valid code). Including them caused a
-// confirmed bug where `x = async / 2; // real` swallowed the trailing comment as fake regex
-// content, since `async` isn't actually a value-position word here, it's a variable name.
-// Everything NOT in this set (plain identifiers, `this`/`super`/`true`/`false`/`null`, and any
-// contextual keyword used as a value) defaults to value-like (division). Erring toward regex on
-// an unlisted word is the safer failure mode. A wrongly-assumed regex that finds no valid close
-// falls back to division (see `scanRegex`). A wrongly-assumed division would scan a real regex
-// literal as ordinary code, and a `//` or `/*` inside its body would then corrupt the parse.
+/**
+ * Words after which a `/` starts an expression (regex), not a division. Deliberately limited to
+ * words that are *always* reserved (never legal as a plain identifier or property name) in
+ * strict-mode/module code, which every JS/TS/JSX/TSX file this tool targets is. Contextual
+ * keywords (`async`, `get`, `set`, `of`, `as`, `from`, `type`, `satisfies`, `is`, `override`,
+ * etc.) are NOT here even though they're keyword-shaped, because they're also completely legal
+ * identifiers (`const async = 1; async / 2` is real, valid code). Including them caused a
+ * confirmed bug where `x = async / 2; // real` swallowed the trailing comment as fake regex
+ * content, since `async` isn't actually a value-position word here, it's a variable name.
+ * Everything NOT in this set (plain identifiers, `this`/`super`/`true`/`false`/`null`, and any
+ * contextual keyword used as a value) defaults to value-like (division). Erring toward regex on
+ * an unlisted word is the safer failure mode. A wrongly-assumed regex that finds no valid close
+ * falls back to division (see `scanRegex`). A wrongly-assumed division would scan a real regex
+ * literal as ordinary code, and a `//` or `/*` inside its body would then corrupt the parse.
+ */
 const EXPR_START_KEYWORDS = new Set([
   'return',
   'typeof',
@@ -74,16 +76,18 @@ const EXPR_START_KEYWORDS = new Set([
   'protected'
 ]);
 
-// Postfix operators: the expression before them is already complete, so a following `/` divides.
+/** Postfix operators: the expression before them is already complete, so a following `/` divides. */
 const POSTFIX_OPERATORS = new Set(['++', '--']);
 
-// `)` and `]` close a value expression (a call/parenthesized expression, an index/array), so a
-// following `/` divides. `}` is deliberately absent: at top level it's ambiguous between closing
-// a block statement (regex should follow) and closing an object literal (division should
-// follow), and resolving that needs real parsing. It defaults to `'expr-start'` via the generic
-// fallback below, for the same erring-toward-regex reasoning as `EXPR_START_KEYWORDS`. Inside a
-// template `${...}`, `}` is handled separately by brace-depth tracking instead (see
-// `TemplateFrame`), where the object-vs-interpolation question is already resolved by depth.
+/**
+ * `)` and `]` close a value expression (a call/parenthesized expression, an index/array), so a
+ * following `/` divides. `}` is deliberately absent: at top level it's ambiguous between closing
+ * a block statement (regex should follow) and closing an object literal (division should
+ * follow), and resolving that needs real parsing. It defaults to `'expr-start'` via the generic
+ * fallback below, for the same erring-toward-regex reasoning as `EXPR_START_KEYWORDS`. Inside a
+ * template `${...}`, `}` is handled separately by brace-depth tracking instead (see
+ * `TemplateFrame`), where the object-vs-interpolation question is already resolved by depth.
+ */
 const VALUE_CLOSERS = new Set([')', ']']);
 
 const IDENTIFIER_START = /[\p{L}\p{Nl}_$]/u;
@@ -394,6 +398,11 @@ function stepTemplateExprBrace(
   return i + 1;
 }
 
+/**
+ * Steps one punctuator/operator character not already handled by a more specific branch above.
+ * Only `POSTFIX_OPERATORS` and `VALUE_CLOSERS` produce `'value'`; everything else defaults to
+ * `'expr-start'`, the same erring-toward-regex fallback as `EXPR_START_KEYWORDS`.
+ */
 function stepGenericToken(source: string, i: number): {end: number; category: TokenCategory} {
   const twoChar = source.slice(i, i + 2);
   if (POSTFIX_OPERATORS.has(twoChar)) {
@@ -421,12 +430,14 @@ function buildComment(kind: 'line' | 'block', source: string, start: number, end
   };
 }
 
-// A block comment's open delimiter is `/*` plus any immediately-following `*` characters (the
-// `/**` JSDoc convention). Extra stars are decoration, not content, so downstream reflow
-// shouldn't see them as body text. Bounded by the close position (or `end`, for an unterminated
-// comment) so this can never consume into or past the closing `*/` itself: for `/**/ `
-// (empty body) the close starts right at index 2, so the bound stops the scan there and `open`
-// stays `/*`, not `/**`.
+/**
+ * A block comment's open delimiter is `/*` plus any immediately-following `*` characters (the
+ * `/**` JSDoc convention). Extra stars are decoration, not content, so downstream reflow
+ * shouldn't see them as body text. Bounded by the close position (or `end`, for an unterminated
+ * comment) so this can never consume into or past the closing `*​/` itself: for `/**​/ `
+ * (empty body) the close starts right at index 2, so the bound stops the scan there and `open`
+ * stays `/*`, not `/**`.
+ */
 function blockOpen(source: string, start: number, end: number, closed: boolean): string {
   const limit = closed ? end - 2 : end;
   let i = start + 2;
@@ -446,9 +457,11 @@ function computeOwnLine(source: string, start: number): boolean {
   return /^\s*$/.test(source.slice(lineStart, start));
 }
 
-// Heuristic hint for `core/`: if a multi-line block comment's second line starts with `<indent>*`
-// (optionally followed by one space), reuse that prefix. Not a guarantee. `core/` (reshape.ts,
-// phase 5) owns the real decision, this just carries forward what the author already wrote.
+/**
+ * Heuristic hint for `core/`: if a multi-line block comment's second line starts with `<indent>*`
+ * (optionally followed by one space), reuse that prefix. Not a guarantee. `core/` (reshape.ts,
+ * phase 5) owns the real decision, this just carries forward what the author already wrote.
+ */
 function computeLinePrefix(source: string, start: number, end: number): string {
   const secondNewline = source.indexOf('\n', start);
   if (secondNewline === -1 || secondNewline >= end) {
