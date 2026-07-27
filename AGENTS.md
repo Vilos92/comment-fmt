@@ -21,6 +21,9 @@ Living conventions for this repo. Ask whether new habits belong here vs `README.
 
 `PLAN.md` is the architecture and phasing source of truth -- code comments citing "plan §N" mean that
 document. Check it before proposing a structural change or re-deriving something it already settled.
+**Once the tool is operational (`PLAN.md`'s own Status section tracks this), delete it** and sweep every
+`plan §N` citation out of the codebase's comments first, rewriting each into the rationale it was standing
+in for. It's a handoff document for building the tool, not permanent project documentation.
 
 ## Toolchain
 
