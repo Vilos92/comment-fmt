@@ -5,7 +5,7 @@ import {isDirective, isExampleTag, isFenceLine, isTableLike, isTagLine} from './
  */
 
 /**
- * A logical unit within a comment body -- the granularity `wrap.ts` reflows at. `protected`
+ * A logical unit within a comment body: the granularity `wrap.ts` reflows at. `protected`
  * blocks (blank-line separators, fenced code, directive lines, table-like content) are always
  * passed through unchanged, matching the plan §7 step 0 gate's "if uncertain, don't touch it"
  * bias at block scope instead of whole-comment scope.
@@ -27,7 +27,7 @@ const LIST_MARKER = /^\s*([-*+]|\d+[.)])\s/;
 
 /**
  * Splits a comment body's lines into `Block`s. A new block starts at a blank line, a list-item
- * marker, a JSDoc-style `@tag` line, an `@example` region, or a fenced-code boundary -- each is a
+ * marker, a JSDoc-style `@tag` line, an `@example` region, or a fenced-code boundary. Each is a
  * point where merging across it into one wrapped paragraph would be wrong. A directive line (plan
  * §8.1) always forms its own single-line protected block, whether or not it sits inside an
  * otherwise-wrappable block comment, so only that line is exempted rather than the whole
@@ -67,7 +67,7 @@ export function splitIntoBlocks(lines: readonly string[], extraDirectives: reado
     }
 
     if (inExample) {
-      // Unlike a fence, `@example` has no closing marker -- JSDoc runs it until the next tag
+      // Unlike a fence, `@example` has no closing marker. JSDoc runs it until the next tag
       // (including another `@example`, which starts its own region rather than closing this one)
       // or a blank line. Close the region here and fall through to process `line` normally below,
       // rather than `continue`, so its own boundary rule (blank/tag/directive/etc.) still applies.
@@ -107,7 +107,7 @@ export function splitIntoBlocks(lines: readonly string[], extraDirectives: reado
   }
 
   // An unterminated fence or a trailing @example with no following boundary still needs its
-  // content preserved -- treat it as protected rather than let it fall through to the generic
+  // content preserved. Treat it as protected rather than let it fall through to the generic
   // flush below and get reflowed.
   if (inFence || inExample) {
     blocks.push({lines: current, protected: true});

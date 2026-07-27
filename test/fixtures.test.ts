@@ -3,7 +3,7 @@
 // `<name>.expected.<ext>`, eyeball it, commit both. Re-running without the env var just asserts
 // the formatter's output still matches the committed `.expected` file.
 //
-// Only `js` has a real formatter behind it as of Phase 2 (`lang/js.ts` + `core/`) -- `css` and
+// Only `js` has a real formatter behind it as of Phase 2 (`lang/js.ts` + `core/`). `css` and
 // `html` lexers land in Phase 6, so those two langs fall back to an identity pass-through and
 // stay at zero fixtures until then.
 import {existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync} from 'node:fs';
@@ -56,7 +56,7 @@ for (const lang of LANGS) {
 
   describe(`fixtures/${lang}`, () => {
     if (cases.length === 0) {
-      // No fixtures committed yet for this language -- expected until Phase 2/6 add them.
+      // No fixtures committed yet for this language. Expected until Phase 2/6 add them.
       test.skip('no fixtures yet', () => {});
       return;
     }
@@ -73,7 +73,7 @@ for (const lang of LANGS) {
         }
 
         // A missing `.expected` file outside update mode must fail, not silently write one and
-        // then pass against what it just wrote -- that would accept any input with no reviewed
+        // then pass against what it just wrote. That would accept any input with no reviewed
         // golden file to catch a regression against.
         if (!existsSync(fixtureCase.expectedPath)) {
           throw new Error(

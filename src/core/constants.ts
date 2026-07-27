@@ -2,10 +2,10 @@
  * Constants.
  */
 
-/** Hard cap. No output line may ever exceed this width — see `wrap.ts` step 0 and step 4. */
+/** Hard cap. No output line may ever exceed this width. See `wrap.ts` step 0 and step 4. */
 export const DEFAULT_MAX_LENGTH = 110;
 
-/** Soft target the greedy fill wraps toward. Always `<= maxLength`; the gap is deliberate
+/** Soft target the greedy fill wraps toward. Always `<= maxLength`. The gap is deliberate
  * headroom for the orphan guard to move a word without breaking the hard cap. */
 export const DEFAULT_TARGET_LENGTH = 105;
 
@@ -16,11 +16,11 @@ export const DEFAULT_TARGET_LENGTH = 105;
  *
  * Plan §6 describes a `COMMENT_FMT_ORPHAN_RATIO` env-var override for that tuning pass. It
  * deliberately doesn't live here: this is `core/`, which stays pure and takes options in as plain
- * values (plan §4's hard rule -- no `node:*`, including the ambient `process` global), and reading
+ * values (plan §4's hard rule: no `node:*`, including the ambient `process` global). Reading
  * an env var to silently change a public API's (`format()`/`wrap()`) default behavior is exactly
  * the kind of surprising, hard-to-reproduce impurity that rule exists to prevent. When the Phase 7
  * tuning pass needs this, wire it explicitly in `cli/` (Phase 3) as a flag that resolves to a real
- * `WrapOptions.orphanMinRatio` value -- not as ambient state a library caller can't see or override.
+ * `WrapOptions.orphanMinRatio` value. It should not be ambient state a library caller can't see or override.
  */
 export const DEFAULT_ORPHAN_MIN_RATIO = 0.3;
 

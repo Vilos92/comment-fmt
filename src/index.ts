@@ -25,11 +25,11 @@ const DEFAULT_BLOCK_PREFIX = '* ';
 
 /**
  * Reflows every `//` and `/* *​/` comment in JS/TS/JSX/TSX source text to fit within
- * `options.maxLength` columns, without touching anything else -- non-comment code is guaranteed
+ * `options.maxLength` columns, without touching anything else. Non-comment code is guaranteed
  * byte-for-byte identical (see `test/props`, property 9.1.4).
  *
  * A comment whose every physical line already fits is returned completely untouched, not just
- * "unchanged content re-serialized the same way" -- this function slices the original source
+ * "unchanged content re-serialized the same way." This function slices the original source
  * around comments it doesn't need to touch, rather than reconstructing them, so there's no path
  * by which reflow logic could introduce a whitespace difference in already-fitting content.
  */
@@ -38,7 +38,7 @@ export function format(source: string, options: FormatOptions = {}): string {
   let result = source;
 
   // Reverse order: replacing a later comment first keeps every earlier comment's [start, end)
-  // offsets -- computed against the original `source` -- valid against `result` at each step.
+  // offsets, computed against the original `source`, valid against `result` at each step.
   for (let i = comments.length - 1; i >= 0; i -= 1) {
     const comment = comments[i] as Comment;
     const replacement = reflowComment(source, comment, options);
@@ -86,12 +86,12 @@ function reflowLineComment(comment: Comment, raw: string, options: FormatOptions
 function reflowBlockComment(comment: Comment, raw: string, options: FormatOptions): string {
   const terminated = comment.close.length > 0;
   // When terminated, `inner` spans from right after `open` to right before the closing `*/`, so
-  // for a multi-line comment its last split-by-`\n` entry isn't a content line at all -- it's
+  // for a multi-line comment its last split-by-`\n` entry isn't a content line at all. It's
   // whatever whitespace sits on the closer's own physical line before `*/` (e.g. the ` ` in
   // `\n */`). Folding that into content, as an earlier version of this function did, both
   // double-counts it as a blank content line and throws away the closer's real indentation. An
   // unterminated comment (malformed/truncated source, `comment.close === ''`) has no such line at
-  // all -- every physical line is real content, and there's no closer to reconstruct.
+  // all. Every physical line is real content, and there's no closer to reconstruct.
   const inner = terminated
     ? raw.slice(comment.open.length, raw.length - comment.close.length)
     : raw.slice(comment.open.length);
@@ -101,7 +101,7 @@ function reflowBlockComment(comment: Comment, raw: string, options: FormatOption
   // A comment already spanning multiple physical lines carries its own detected `linePrefix`
   // (full leading whitespace already included, per `computeLinePrefix` in lang/js.ts). One that's
   // only overflowing now, and must expand from single-line, has no such line to detect a
-  // convention from -- synthesize one aligned under the comment's second character (DEFAULT_BLOCK_PREFIX).
+  // convention from. Synthesize one aligned under the comment's second character (DEFAULT_BLOCK_PREFIX).
   const continuationPrefix = wasSingleLine
     ? `${' '.repeat(comment.indent + 1)}${DEFAULT_BLOCK_PREFIX}`
     : comment.linePrefix || `${' '.repeat(comment.indent + 1)}${DEFAULT_BLOCK_PREFIX}`;
@@ -114,12 +114,12 @@ function reflowBlockComment(comment: Comment, raw: string, options: FormatOption
     idx === 0 ? line.replace(/^[ \t]+/, '') : stripLinePrefix(line, continuationPrefix)
   );
   // Line 0 sits right after `open` on the same physical line, so its real prefix width is
-  // `comment.indent + comment.open.length`, not `continuationPrefix`'s -- they're equal for
+  // `comment.indent + comment.open.length`, not `continuationPrefix`'s. They're equal for
   // aligned JSDoc-style comments (`/**` is 3 columns, ` * ` is 3 columns) but diverge for e.g. a
   // `/***`-opened comment (4 columns) against a synthesized ` * ` continuation (3 columns).
   // wrap() takes one uniform budget for the whole call, so use whichever of the two is larger:
   // never smaller than line 0 needs (so it can't push line 0 over maxLength), and continuation
-  // lines wrap very slightly earlier than strictly required in the rare case they diverge -- safe
+  // lines wrap very slightly earlier than strictly required in the rare case they diverge. This is safe
   // in both directions.
   const openWidth = comment.indent + comment.open.length;
   const budget = Math.max(measure(continuationPrefix), openWidth);
@@ -138,7 +138,7 @@ function stripLinePrefix(line: string, prefix: string): string {
     return line.slice(prefix.length);
   }
   // Doesn't match the detected/synthesized prefix exactly (e.g. a line with inconsistent
-  // indentation) -- fall back to stripping generic leading whitespace and an optional `*` rather
+  // indentation). Fall back to stripping generic leading whitespace and an optional `*` rather
   // than losing the line's content.
   return line.replace(/^\s*\*?\s?/, '');
 }

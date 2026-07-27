@@ -2,11 +2,11 @@
  * Types.
  */
 
-/** Comment delimiter shape. `line` covers `//`; `block` covers `/*` comments. */
+/** Comment delimiter shape. `line` covers `//`. `block` covers `/*` comments. */
 export type CommentKind = 'line' | 'block';
 
 /**
- * A comment located in source text. Lexers (`lang/*.ts`) produce these; `core/` consumes them and
+ * A comment located in source text. Lexers (`lang/*.ts`) produce these. `core/` consumes them and
  * never re-derives anything from raw source, so every field a reflow decision needs must live
  * here.
  */

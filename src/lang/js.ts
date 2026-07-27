@@ -9,7 +9,7 @@ import type {Comment} from './types.ts';
  * `/` starts a regex literal or is a division operator. `'value'` means the previous token was
  * something a `/` after it would divide (an identifier, literal, or closing `)`/`]`/postfix
  * `++`/`--`). Anything else (operators, most keywords, start of file/expression) is
- * `'expr-start'` -- a `/` there begins a regex.
+ * `'expr-start'`. A `/` there begins a regex.
  */
 type TokenCategory = 'value' | 'expr-start';
 
@@ -28,15 +28,15 @@ type TemplateFrame = {readonly kind: 'text'} | {readonly kind: 'expr'; braceDept
 // Words after which a `/` starts an expression (regex), not a division. Deliberately limited to
 // words that are *always* reserved (never legal as a plain identifier or property name) in
 // strict-mode/module code, which every JS/TS/JSX/TSX file this tool targets is. Contextual
-// keywords -- `async`, `get`, `set`, `of`, `as`, `from`, `type`, `satisfies`, `is`, `override`,
-// etc. -- are NOT here even though they're keyword-shaped, because they're also completely legal
-// identifiers (`const async = 1; async / 2` is real, valid code): including them caused a
+// keywords (`async`, `get`, `set`, `of`, `as`, `from`, `type`, `satisfies`, `is`, `override`,
+// etc.) are NOT here even though they're keyword-shaped, because they're also completely legal
+// identifiers (`const async = 1; async / 2` is real, valid code). Including them caused a
 // confirmed bug where `x = async / 2; // real` swallowed the trailing comment as fake regex
 // content, since `async` isn't actually a value-position word here, it's a variable name.
-// Everything NOT in this set -- plain identifiers, `this`/`super`/`true`/`false`/`null`, and any
-// contextual keyword used as a value -- defaults to value-like (division). Erring toward regex on
-// an unlisted word is the safer failure mode: a wrongly-assumed regex that finds no valid close
-// falls back to division (see `scanRegex`); a wrongly-assumed division would scan a real regex
+// Everything NOT in this set (plain identifiers, `this`/`super`/`true`/`false`/`null`, and any
+// contextual keyword used as a value) defaults to value-like (division). Erring toward regex on
+// an unlisted word is the safer failure mode. A wrongly-assumed regex that finds no valid close
+// falls back to division (see `scanRegex`). A wrongly-assumed division would scan a real regex
 // literal as ordinary code, and a `//` or `/*` inside its body would then corrupt the parse.
 const EXPR_START_KEYWORDS = new Set([
   'return',
@@ -108,14 +108,14 @@ const RADIX_DIGIT_BY_PREFIX = new Map([
  *
  * Deliberately unsupported, by design rather than oversight:
  * - Legacy Annex B `<!--`/`-->` line comments (sloppy-mode only, and would collide with `<` as a
- *   comparison operator or a JSX tag open -- not worth the ambiguity for a construct that's dead
+ *   comparison operator or a JSX tag open, so it's not worth the ambiguity for a construct that's dead
  *   in modern TS/JSX).
  * - JSX text-node content is not tracked, so `//` or `/* *​/` inside JSX children text (not inside
  *   a `{...}` expression container) is misread as a real comment. Fixing this needs real
- *   JSX-tag-vs-text-mode tracking, which is parser territory; comments inside `{/* like this *​/}`
+ *   JSX-tag-vs-text-mode tracking, which is parser territory. Comments inside `{/* like this *​/}`
  *   work fine today since `{`/`}` are ordinary punctuation to this scanner.
  *
- * No parser is used -- this is a single forward character scan that tracks just enough token
+ * No parser is used. This is a single forward character scan that tracks just enough token
  * context (the previous token's value-vs-expression-start category, and a template-literal
  * nesting stack) to disambiguate regex literals from division and to find comments nested inside
  * `${...}` interpolations, including nested templates.
@@ -125,7 +125,7 @@ export function findComments(source: string): Comment[] {
   const n = source.length;
   const templateStack: TemplateFrame[] = [];
   let lastCategory: TokenCategory = 'expr-start';
-  // Property names can be any identifier -- including a word in EXPR_START_KEYWORDS, e.g.
+  // Property names can be any identifier, including a word in EXPR_START_KEYWORDS. For example,
   // `x.return / 2` is valid, unambiguous division. Without this, a member access on a
   // reserved-word-shaped property name would misclassify the following `/` as a regex start.
   let afterDot = false;
@@ -182,7 +182,7 @@ export function findComments(source: string): Comment[] {
         afterDot = false;
         continue;
       }
-      // Not a valid regex on this line (see scanRegex) -- fall through to generic handling below,
+      // Not a valid regex on this line (see scanRegex). Fall through to generic handling below,
       // which treats the '/' as a division/operator punctuator.
     }
 
@@ -253,7 +253,7 @@ function scanString(source: string, start: number, quote: string): number {
       return i + 1;
     }
     if (ch === '\n') {
-      return i; // Unterminated string -- stop before the newline rather than consume it.
+      return i; // Unterminated string. Stop before the newline rather than consume it.
     }
     i += 1;
   }
@@ -262,7 +262,7 @@ function scanString(source: string, start: number, quote: string): number {
 
 /** Returns the index one past a regex literal's closing `/` (plus flags), or `undefined` if the
  * span starting at `start` isn't a valid regex literal (hit a newline before an unescaped close,
- * meaning it wasn't one -- JS regex literals can't contain a raw newline). */
+ * meaning it wasn't one, since JS regex literals can't contain a raw newline). */
 function scanRegex(source: string, start: number): number | undefined {
   const n = source.length;
   let i = start + 1;
@@ -295,7 +295,7 @@ function scanRegex(source: string, start: number): number | undefined {
     }
     i += 1;
   }
-  return n; // Unterminated at EOF -- accept what we scanned rather than loop or crash.
+  return n; // Unterminated at EOF. Accept what we scanned rather than loop or crash.
 }
 
 function scanIdentifier(source: string, start: number): {end: number; text: string} {
@@ -416,9 +416,9 @@ function buildComment(kind: 'line' | 'block', source: string, start: number, end
 }
 
 // A block comment's open delimiter is `/*` plus any immediately-following `*` characters (the
-// `/**` JSDoc convention) -- extra stars are decoration, not content, so downstream reflow
+// `/**` JSDoc convention). Extra stars are decoration, not content, so downstream reflow
 // shouldn't see them as body text. Bounded by the close position (or `end`, for an unterminated
-// comment) so this can never consume into -- or past -- the closing `*/` itself: for `/**/ `
+// comment) so this can never consume into or past the closing `*/` itself: for `/**/ `
 // (empty body) the close starts right at index 2, so the bound stops the scan there and `open`
 // stays `/*`, not `/**`.
 function blockOpen(source: string, start: number, end: number, closed: boolean): string {
@@ -441,7 +441,7 @@ function computeOwnLine(source: string, start: number): boolean {
 }
 
 // Heuristic hint for `core/`: if a multi-line block comment's second line starts with `<indent>*`
-// (optionally followed by one space), reuse that prefix. Not a guarantee -- `core/` (reshape.ts,
+// (optionally followed by one space), reuse that prefix. Not a guarantee. `core/` (reshape.ts,
 // phase 5) owns the real decision, this just carries forward what the author already wrote.
 function computeLinePrefix(source: string, start: number, end: number): string {
   const secondNewline = source.indexOf('\n', start);

@@ -67,10 +67,11 @@ Skip markers on lean single-export files where they'd add ceremony only. Order (
 
 - **Why over what.** Drop comments that only restate mechanics the code already shows.
 - **State intent positively.** Prefer `// ensures Y` over `// prevents X` when the code already makes X impossible.
-- **Layer once.** Put shared why on a constant, type field, or entry closure — don't repeat it at every call site.
-- **A comment carries its own why** — never just a pointer to this file or other contributor docs. Referencing other code (a sibling function, a fixture) is fine.
-- **JSDoc** on exports and non-trivial helpers when the contract isn't obvious; often one crisp line is enough. Don't document module-private types.
+- **Layer once.** Put shared why on a constant, type field, or entry closure. Don't repeat it at every call site.
+- **A comment carries its own why**, never just a pointer to this file or other contributor docs. Referencing other code (a sibling function, a fixture) is fine.
+- **JSDoc** on exports and non-trivial helpers when the contract isn't obvious. Often one crisp line is enough. Don't document module-private types.
 - In prose, backtick **identifiers** (`targetLength`), not section headers.
+- **Default to separate sentences over semicolons or em dashes joining clauses.** Either is fine occasionally for a tight parenthetical, but overuse gives the codebase a heavy editorial voice.
 
 ## Naming
 

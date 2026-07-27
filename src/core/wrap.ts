@@ -24,17 +24,17 @@ export type WrapOptions = {
  */
 
 /**
- * Reflows a comment's plain content lines -- no delimiters, no per-line decoration such as a
- * block comment's leading ` * ` -- to fit within `maxLength` columns once `linePrefixWidth`
+ * Reflows a comment's plain content lines (no delimiters, no per-line decoration such as a
+ * block comment's leading ` * `) to fit within `maxLength` columns once `linePrefixWidth`
  * columns of caller-applied decoration (indent plus that decoration) are added back on. The
- * caller strips and re-applies decoration; this function only ever sees and returns bare text.
+ * caller strips and re-applies decoration. This function only ever sees and returns bare text.
  *
  * Greedy fill toward `targetLength`, not Knuth-Plass `balance`: adding one word should change the
  * minimum number of lines, not rewrite a whole paragraph, which is what keeps an autofixer's
  * diffs (and `git blame`) trustworthy on every run (plan §7).
  *
- * Step 0 is the tool's primary safety property, not an optimisation: if every line already fits,
- * the input is returned byte-for-byte unchanged -- no block splitting, no normalisation, nothing
+ * Step 0 is the tool's primary safety property, not an optimisation. If every line already fits,
+ * the input is returned byte-for-byte unchanged: no block splitting, no normalisation, nothing
  * that could touch a hand-aligned table or ASCII diagram that already happens to fit. Untouched
  * input is the overwhelming common case, which is exactly why this gate matters more than any
  * heuristic downstream of it.

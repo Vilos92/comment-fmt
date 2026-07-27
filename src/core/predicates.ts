@@ -2,11 +2,11 @@
  * Constants.
  */
 
-// Directives that must never be reflowed, even when they overflow -- wrapping one changes its
+// Directives that must never be reflowed, even when they overflow. Wrapping one changes its
 // text, and for the tool-directive entries that silently stops the tool from doing anything
 // (e.g. a wrapped `oxlint-disable-next-line some-rule` no longer disables the rule while CI stays
 // green). Matched by prefix against each line's trimmed content, not by substring search
-// anywhere in the comment -- `// this mentions eslint-disable in prose` must still wrap, and only
+// anywhere in the comment. `// this mentions eslint-disable in prose` must still wrap, and only
 // a prefix match tells the two apart. `-next-line` / `-disable`-family suffixes don't need
 // separate entries: they share the same prefix as their base directive.
 const DIRECTIVE_MARKERS: readonly string[] = [
@@ -47,7 +47,7 @@ const DIRECTIVE_MARKERS: readonly string[] = [
   // HTML.
   '[if ', // Conditional comments: <!--[if IE]-->
   '#include', // SSI: <!--#include virtual="..." -->
-  // This tool's own escape hatch (plan §8.4) -- self-protecting, so a long ignore directive is
+  // This tool's own escape hatch (plan §8.4). Self-protecting, so a long ignore directive is
   // never itself wrapped into something that no longer matches the syntax it's documented with.
   'comment-fmt-ignore'
 ];
@@ -70,7 +70,7 @@ const MIN_ALIGNED_LINES = 3;
 /**
  * `true` if `line` starts (after trimming) with a known tool directive, or one from
  * `extraDirectives` (plan §6 config surface). Operates on a single line, since a directive inside
- * an otherwise-reflowable multi-line block should only protect that one line -- see `blocks.ts`.
+ * an otherwise-reflowable multi-line block should only protect that one line. See `blocks.ts`.
  */
 export function isDirective(line: string, extraDirectives: readonly string[] = []): boolean {
   const trimmed = line.trim();
@@ -81,7 +81,7 @@ export function isDirective(line: string, extraDirectives: readonly string[] = [
 }
 
 /** ESLint `max-len`'s URL heuristic: a char that isn't `:`/`/`/`?`/`#` immediately before `://`,
- * followed by a char that isn't `?`/`#`. Loose by design -- a false positive just leaves a line
+ * followed by a char that isn't `?`/`#`. Loose by design. A false positive just leaves a line
  * unwrapped, which is the safe direction (plan §7 step 0 is the real safety net either way). */
 export function isUrl(text: string): boolean {
   return /[^:/?#]:\/\/[^?#]/u.test(text);
@@ -94,15 +94,15 @@ export function isTagLine(line: string): boolean {
 }
 
 /** `true` for a fenced-code boundary (``` ```` ```), which opens or closes a protected region in
- * `blocks.ts` as a matched pair -- content between two fence lines is passed through untouched
+ * `blocks.ts` as a matched pair. Content between two fence lines is passed through untouched
  * regardless of width, the same way step 0 protects an already-fitting comment. */
 export function isFenceLine(line: string): boolean {
   return line.trim().startsWith('```');
 }
 
-/** `true` for an `@example` tag. Unlike a fence, this isn't a matched open/close pair -- a second
- * `@example` starts its own new protected region rather than closing the first one (JSDoc has no
- * closing marker for `@example`; it runs until the next tag or the comment ends). */
+/** `true` for an `@example` tag. Unlike a fence, this isn't a matched open/close pair. A second
+ * `@example` starts its own new protected region rather than closing the first one. JSDoc has no
+ * closing marker for `@example`. It runs until the next tag or the comment ends. */
 export function isExampleTag(line: string): boolean {
   return line.trim().startsWith('@example');
 }
@@ -111,8 +111,8 @@ export function isExampleTag(line: string): boolean {
  * Best-effort, fail-safe detector for tabular/aligned content across a candidate block's lines
  * (plan §8.3). Two tiers: a precise GFM table check (a pipe-bearing line directly followed by a
  * valid delimiter row), and a looser heuristic bundle (box-drawing/tree characters, or `|`/space
- * runs that land on the same column across `MIN_ALIGNED_LINES`+ lines). Returns `false` -- never
- * touch the block -- whenever a check is inconclusive; a false positive here only costs one
+ * runs that land on the same column across `MIN_ALIGNED_LINES`+ lines). Returns `false` (never
+ * touch the block) whenever a check is inconclusive. A false positive here only costs one
  * unformatted comment, a false negative can destroy hand-aligned content.
  */
 export function isTableLike(lines: readonly string[]): boolean {
