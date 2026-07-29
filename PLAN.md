@@ -18,8 +18,8 @@ change to reflect progress -- this section is the only part that does.
 | 1 -- Scaffold            | done        | [PR #1](https://github.com/Vilos92/comment-fmt/pull/1) |
 | 2 -- Core + JS lexer     | done        | [PR #2](https://github.com/Vilos92/comment-fmt/pull/2) |
 | 3 -- CLI                 | done        | [PR #3](https://github.com/Vilos92/comment-fmt/pull/3) |
-| 4 -- Differential corpus | in this PR  | [PR #4](https://github.com/Vilos92/comment-fmt/pull/4) |
-| 5 -- Block reshape       | not started |                                                        |
+| 4 -- Differential corpus | done        | [PR #4](https://github.com/Vilos92/comment-fmt/pull/4) |
+| 5 -- Block reshape       | in this PR  | [PR #5](https://github.com/Vilos92/comment-fmt/pull/5) |
 | 6 -- CSS + HTML lexers   | not started |                                                        |
 | 7 -- Rollout and tuning  | not started |                                                        |
 | 8 -- Astro               | unscheduled | not committed to; see §4, §12                          |
@@ -37,8 +37,8 @@ honors the file-level, preceding-line, and inline forms for real. Deliberately d
 version or publish to npm: that's deferred until closer to an actual public release, so
 `package.json` stays at `0.0.0` through this phase and the ones after it.
 
-**PR #4 (this one) finishes** §12 Phase 4's scope: `test/corpus/run.ts` (a differential-testing
-harness checking the §9.1.4 code-invariance property over real code, not synthetic fixtures), a
+**PR #4** finished §12 Phase 4's scope: `test/corpus/run.ts` (a differential-testing harness
+checking the §9.1.4 code-invariance property over real code, not synthetic fixtures), a
 `--report-overwidth` CLI mode for the §9.3/§8.3 structure-taxonomy sampling pass, and
 `test/corpus/fetch.sh`, the single source of truth for the 15-repo corpus list. This deliberately
 overrides §9.3's original text ("wire this as a scheduled CI job"): both a weekly cron and a
@@ -47,12 +47,56 @@ favor of no CI integration at all -- this is a purely local dev tool (`./test/co
 bun test/corpus/run.ts corpus/* node_modules`), run by hand whenever a change actually warrants
 it. Also a documented scope reduction from the plan's suggested 20-30 repos. Run manually against
 those 15 repos plus the five consumer repos and their `node_modules` (589,350 files total): zero
-code-invariance violations. Two real, previously-hidden
-bugs surfaced by that run and are now fixed with regression fixtures: a protected directive or
-structural marker (an `eslint-disable` comment, a lone fenced-code marker, an `@example` tag) could
-lose its original spacing, or a single-line block comment could get force-split into a spurious
-multi-line opener-plus-closer shape, whenever it was over `maxLength` but its content turned out to
-be unwrappable. 84 fixture pairs live under `test/fixtures/js/` as of this PR.
+code-invariance violations, both then and after every subsequent phase's own re-run of the same
+scan. A CodeRabbit review pass also caught a real positional-matching flaw in `--report-overwidth`
+(a wrapped `//` comment legitimately becomes multiple comments once re-lexed, since each physical
+line starts its own `//`) that's fixed as of that PR's final commit.
+
+**PR #5 (this one) finishes** §12 Phase 5's scope, revised partway through review from the plan's
+original two-threshold hysteresis design to something simpler and deliberately less aggressive.
+Block shape (§1) is a one-way ratchet, symmetric with how width already works: a single-line
+comment expands to the multi-line starred form when it overflows (the part of §1 that was only
+partly implemented before this PR -- a comment expanding from single-line still put its first
+content word directly on the `/**`/`/*` line), but a multi-line comment that already fits is never
+collapsed back down, no matter how short its content is. `core/reshape.ts` and its hysteresis
+machinery were deleted entirely rather than kept as a configuration option; the whole reason that
+machinery existed was to decide _whether_ to collapse, and once collapsing left the picture there
+was no decision left to make.
+
+This reverses an initial implementation of §1's "comments that fit on one line collapse" language,
+which turned out to have real user-facing costs the plan hadn't anticipated: it silently flattened
+this repo's own multi-line section-comment convention the moment it landed (fixed at the time with
+a `comment-fmt-ignore` annotation on every marker, since reverted along with the behavior that
+required it), and more generally treats a human's or an agent's deliberate choice to write
+something on multiple lines as a mistake to correct rather than an intentional decision to respect.
+Checked against the tooling ecosystem before reverting: this project's own explicitly-cited
+inspiration, `eslint-plugin-comment-length`, defaults to an `"overflow-only"` mode that never
+collapses a fitting multi-line comment, with an opt-in `"compact"` mode for the old behavior; ESLint
+core's own `multiline-comment-style` rule never does width-based collapsing at all. The tool's job
+is rescuing overflow, not having opinions about a comment being more compact than it needs to be.
+
+The 589,350-file corpus re-run this phase (repeated again after the mid-review revision) surfaced
+one real, previously-unreachable bug, fixed with a regression fixture: a continuation prefix
+without a trailing space (some files use `' *'`, not `' * '`) concatenated directly against content
+starting with `/` (an embedded `// example` line inside a larger comment's prose) formed a literal
+`*/` and prematurely closed the comment, corrupting the file. That same corpus run also surfaced a
+separate, unrelated bug worth fixing alongside it: this repo's own pre-commit hook was silently
+rewriting staged `test/fixtures/**` files, since `comment-fmt --write`, unlike `vp check --fix`, has
+no built-in exclusion for explicitly-named files (`ignore` only filters discovery, per §6) and
+lint-staged feeds every staged path explicitly. Fixed with `scripts/staged-write.sh`, a thin wrapper
+that filters fixture paths out before invoking the real CLI. A first version of that wrapper matched
+against `test/fixtures/*`, which silently matched nothing at all: `lint-staged` passes every staged
+path as absolute by default, so the pattern needed a leading `*/` to match regardless of prefix
+length. Caught by a review pass, then confirmed live with a genuinely overflowing fixture staged
+through the real hook. 83 fixture pairs live under `test/fixtures/js/` as of this PR.
+
+Also landed on `test/corpus/run.ts` this phase: a `MAX_FILE_BYTES` skip (2MB) for the rare
+pathological giant file (a synthetic 583,000-line TypeScript stress-test fixture, a 12.6MB minified
+bundle vendored into `node_modules`) whose per-comment reflow cost otherwise dominated total scan
+time without surfacing anything beyond raw scale, every skip reported by path and size rather than
+silently shrinking coverage. The new size check's own `statSync` call is wrapped in the same
+try/catch-and-record pattern as the adjacent `readdirSync`, so a broken symlink or a TOCTOU race
+during a long scan fails that one file, not the run.
 
 **Once Phase 7 lands, delete this file** -- and before deleting it, sweep every `(plan §N)` citation out
 of the codebase's comments first. It's a handoff document for building the tool, not permanent project

@@ -153,6 +153,13 @@ function reflowComment(source: string, comment: Comment, options: FormatOptions)
   const raw = source.slice(comment.start, comment.end);
   const maxLength = options.maxLength ?? DEFAULT_MAX_LENGTH;
 
+  // Block shape (plan §1) is a one-way ratchet driven only by overflow, the same as width
+  // already is: a comment expands from single-line to the starred multi-line form when it
+  // overflows, but a multi-line comment that already fits is never collapsed back down, no
+  // matter how short its content is. That makes "every physical line already fits" the whole
+  // answer for both comment kinds, so both share this one short-circuit. Whatever shape a human
+  // (or an agent) deliberately chose is left alone as long as it fits; the tool only ever rescues
+  // overflow, it doesn't have opinions about a comment being "more compact than it needs to be."
   if (fitsWithinLimit(raw, comment.indent, maxLength)) {
     return raw;
   }
@@ -203,12 +210,19 @@ function reflowLineComment(comment: Comment, raw: string, options: FormatOptions
 }
 
 /**
- * Reflows a block comment (`/*`- or `/**`-opened) by extracting its content lines, wrapping them
- * with `wrap()`, and reassembling the delimiters and continuation prefix around the result.
- * Handles both an already multi-line comment (reusing its detected `linePrefix`) and one
- * expanding from single-line for the first time (synthesizing one via `DEFAULT_BLOCK_PREFIX`),
- * and both a properly terminated comment and an unterminated one (malformed/truncated source,
- * which has no closing delimiter to reconstruct).
+ * Reflows a block comment (`/*`- or `/**`-opened). Block shape (plan §1) is a one-way ratchet:
+ * this function is only ever reached when something overflows (see the shared short-circuit in
+ * `reflowComment`), so there is no "should this collapse" decision to make here at all, only "does
+ * this need to expand or rewrap." A comment that was already single-line expands to the multi-line
+ * starred form; one that was already multi-line stays multi-line and gets its content rewrapped in
+ * place, never collapsed back down even if the rewrapped content would technically fit on one
+ * line. The opening and closing lines never carry content, per plan §1: every content line,
+ * including what would once have been "line 0" right after `open`, gets its own line with
+ * `continuationPrefix` applied, exactly like every other content line. Handles both an already
+ * multi-line comment (reusing its detected `linePrefix`) and one expanding from single-line for
+ * the first time (synthesizing one via `DEFAULT_BLOCK_PREFIX`), and both a properly terminated
+ * comment and an unterminated one (malformed/truncated source, which has no closing delimiter to
+ * reconstruct).
  */
 function reflowBlockComment(comment: Comment, raw: string, options: FormatOptions): string {
   const terminated = comment.close.length > 0;
@@ -237,45 +251,61 @@ function reflowBlockComment(comment: Comment, raw: string, options: FormatOption
     : (/^\s*/.exec(physicalLines[physicalLines.length - 1] ?? '')?.[0] ?? '');
 
   const contentPhysicalLines = wasSingleLine || !terminated ? physicalLines : physicalLines.slice(0, -1);
-  const contentLines = contentPhysicalLines.map((line, idx) =>
+  const rawContentLines = contentPhysicalLines.map((line, idx) =>
     idx === 0 ? line.replace(/^[ \t]+/, '') : stripLinePrefix(line, continuationPrefix)
   );
-  // Line 0 sits right after `open` on the same physical line, so its real prefix width is
-  // `comment.indent + comment.open.length`, not `continuationPrefix`'s. They're equal for
-  // aligned JSDoc-style comments (`/**` is 3 columns, ` * ` is 3 columns) but diverge for e.g. a
-  // `/***`-opened comment (4 columns) against a synthesized ` * ` continuation (3 columns).
-  // `wrap()` takes one uniform budget for the whole call, so use whichever of the two is larger:
-  // never smaller than line 0 needs (so it can't push line 0 over maxLength), and continuation
-  // lines wrap very slightly earlier than strictly required in the rare case they diverge. This is safe
-  // in both directions.
-  const openWidth = comment.indent + comment.open.length;
-  const budget = Math.max(measure(continuationPrefix), openWidth);
-  const wrapped = wrap(contentLines, budget, options);
+  // A multi-line comment's own line 0 (right after `open`) is empty by convention, not a
+  // deliberate blank-line paragraph break the way one further down would be. Left in, `wrap()`'s
+  // own internal block-splitting reads it as its own separate blank-line block, which leaks a
+  // spurious blank continuation line into the reconstruction below. Dropping it here is safe:
+  // `wrap()` pools every content line's words and re-splits them regardless of original line
+  // boundaries, so this placeholder carries no information a real blank line elsewhere in the
+  // body doesn't already carry on its own.
+  const contentLines =
+    !wasSingleLine && rawContentLines.length > 1 && rawContentLines[0] === ''
+      ? rawContentLines.slice(1)
+      : rawContentLines;
+  const extraDirectives = options.extraDirectives ?? [];
+
+  // Every content line now shares one budget: `continuationPrefix`'s width. Nothing is ever
+  // attached to `open` any more, so there's no separate, wider budget line 0 alone would have
+  // needed under the old opener-attaches-content design.
+  const wrapped = wrap(contentLines, measure(continuationPrefix), options);
   if (
-    wasSingleLine &&
     wrapped.length === 1 &&
     wrapped[0] === contentLines[0] &&
-    checkIsProtectedLine(contentLines[0] ?? '', options.extraDirectives)
+    checkIsProtectedLine(contentLines[0] ?? '', extraDirectives)
   ) {
     // `wrap()` left this untouched specifically because it's protected (plan §8.1/§8.3), not
     // merely because it already fits its own budget. Reconstructing below would lose the
-    // comment's original leading whitespace and force a single-line block comment into a spurious
-    // multi-line shape (an opener line plus a separate closer line) even though a protected
-    // directive must be preserved byte-for-byte. Return the untouched original instead. Content
-    // that merely fits (not protected) still goes through the normal reconstruction below: `budget`
-    // above is a synthesized approximation of line 0's real width (see the comment on it), so an
-    // atypically-spaced original could otherwise read as already fitting `wrap()`'s budget while
-    // still exceeding `maxLength` by the outer, more literal measurement. The reconstruction's own
-    // whitespace normalization is what closes that gap for non-protected content.
+    // comment's original leading whitespace even though a protected directive must be preserved
+    // byte-for-byte. Return the untouched original instead.
     return raw;
   }
 
-  const first = wrapped[0] ?? '';
-  const rest = wrapped.slice(1).map(line => `${continuationPrefix}${line}`.trimEnd());
-  const opener = first.length > 0 ? `${comment.open}${first}` : comment.open;
-  const lines = terminated ? [opener, ...rest, `${closePrefix}${comment.close}`] : [opener, ...rest];
+  const rest = wrapped.map(line => joinPrefixAndContent(continuationPrefix, line).trimEnd());
+  const lines = terminated
+    ? [comment.open, ...rest, `${closePrefix}${comment.close}`]
+    : [comment.open, ...rest];
 
   return lines.join('\n');
+}
+
+/**
+ * Joins a continuation prefix (e.g. `' * '`, or a no-trailing-space `' *'` some files use) to a
+ * content line, inserting a space between the two only when the concatenation would otherwise
+ * form a real `*​/` sequence and prematurely close the comment. A `prefix` ending in `*` immediately
+ * followed by `content` starting with `/` is exactly the shape a comment's own body can contain
+ * without incident (e.g. an embedded `// example` line inside a larger explanatory comment, or a
+ * `/* nested *​/`-looking mention), right up until this reconstruction glues the two together with
+ * nothing in between. This was a real, previously unreachable bug: it only started firing once
+ * plan §12 Phase 5 began running every block comment through reconstruction, including ones that
+ * already fit and were never touched before, confirmed by the plan §9.3 corpus scan finding it in
+ * real `node_modules` content.
+ */
+function joinPrefixAndContent(prefix: string, content: string): string {
+  const needsSeparatingSpace = prefix.endsWith('*') && content.startsWith('/');
+  return needsSeparatingSpace ? `${prefix} ${content}` : `${prefix}${content}`;
 }
 
 /**
