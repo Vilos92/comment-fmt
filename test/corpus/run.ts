@@ -1,19 +1,23 @@
 #!/usr/bin/env bun
 // Differential corpus harness (plan §9.3). Runs `format()` over large volumes of *real* code
-// rather than synthetic fixtures, and reports every file the tool wants to change. Two failure
-// classes matter here, and they are not equally severe. A code-invariance violation (property
-// 9.1.4: the non-comment token stream must be byte-identical before and after) means the lexer
-// mistook code for a comment and corrupted a file, so even one anywhere in a real corpus is a
-// stop-the-world bug. An ordinary "this file would change" count is just the net catching
-// candidates for manual triage or sampling, not a failure by itself. Invoked directly with `bun`
+// rather than synthetic fixtures, and reports every file the tool wants to change. Findings here
+// aren't all equally severe. A code-invariance violation (property 9.1.4: the non-comment token
+// stream must be byte-identical before and after) means the lexer mistook code for a comment and
+// corrupted a file, so even one anywhere in a real corpus is a stop-the-world bug. A file that
+// errored partway through (unreadable, or `format()` itself threw) also fails the run, since a
+// scan that never finished reading every file has nothing meaningful to say about the corpus it
+// skipped. An ordinary "this file would change" count is just the net catching candidates for
+// manual triage or sampling, not a failure by itself. Invoked directly with `bun`
 // (`bun test/corpus/run.ts <root> [...roots]`), not through `vp test`: this is deliberately not
 // part of the per-commit suite (see the weekly-only CI workflow under `.github/workflows/`).
 import {readFileSync, readdirSync} from 'node:fs';
 import type {Dirent} from 'node:fs';
 import {extname, join} from 'node:path';
 
-import {format} from '../../src/index.ts';
-import {findComments} from '../../src/lang/js.ts';
+import {format, type Lang} from '../../src/index.ts';
+import {findComments as findCommentsCss} from '../../src/lang/css.ts';
+import {findComments as findCommentsJs} from '../../src/lang/js.ts';
+import type {Comment} from '../../src/lang/types.ts';
 
 // comment-fmt-ignore
 /*
@@ -43,7 +47,15 @@ type FileError = {
 // "enormous, free, and stylistically diverse"). Only version control internals are skipped.
 const DIRECTORIES_TO_SKIP: ReadonlySet<string> = new Set(['.git']);
 
-const FORMATTABLE_EXTENSIONS: ReadonlySet<string> = new Set(['.js', '.jsx', '.ts', '.tsx']);
+/** Which `Lang` (plan §4) each formattable extension maps to. HTML has no lexer yet. */
+const LANG_BY_EXTENSION: Readonly<Record<string, Lang>> = {
+  '.js': 'js',
+  '.jsx': 'js',
+  '.ts': 'js',
+  '.tsx': 'js',
+  '.css': 'css',
+  '.scss': 'css'
+};
 
 // comment-fmt-ignore
 /*
@@ -57,6 +69,18 @@ function main(): void {
     process.exit(2);
   }
 
+  // A root the caller explicitly named failing to even open is a usage error worth surfacing
+  // immediately, distinct from a descendant directory going bad partway through a deep recursive
+  // walk (handled inside `walkFiles` itself, which records and continues past those instead).
+  for (const root of roots) {
+    try {
+      readdirSync(root, {withFileTypes: true});
+    } catch (error) {
+      process.stderr.write(`Could not read root directory ${root}: ${(error as Error).message}\n`);
+      process.exit(2);
+    }
+  }
+
   const totals: ScanTotals = {scanned: 0, changed: 0};
   const invarianceViolations: InvarianceViolation[] = [];
   const errors: FileError[] = [];
@@ -65,15 +89,19 @@ function main(): void {
   // list, let alone file contents, in memory at once. Only the small running totals/violation/
   // error arrays above accumulate across tens of thousands of files.
   for (const root of roots) {
-    for (const path of walkFiles(root)) {
+    for (const path of walkFiles(root, errors)) {
       scanOneFile(path, totals, invarianceViolations, errors);
     }
   }
 
   printReport(totals, invarianceViolations, errors);
-  // A code-invariance violation is the one finding this harness treats as fatal (plan §9.3). An
-  // ordinary changed-file count is a net, not a gate, so it never affects the exit code.
-  process.exit(invarianceViolations.length > 0 ? 1 : 0);
+  // A code-invariance violation is the most severe finding this harness treats as fatal (plan
+  // §9.3). A file that errored partway through (unreadable, or a genuine crash in `format()`
+  // itself) also fails the run: reporting a clean pass over a scan that never actually finished
+  // reading every file would be misleading, exactly the "run in a misleading state" this repo's
+  // fail-fast convention warns against. An ordinary changed-file count is a net, not a gate, so it
+  // alone never affects the exit code.
+  process.exit(invarianceViolations.length > 0 || errors.length > 0 ? 1 : 0);
 }
 
 main();
@@ -89,16 +117,21 @@ function scanOneFile(
   invarianceViolations: InvarianceViolation[],
   errors: FileError[]
 ): void {
+  const lang = LANG_BY_EXTENSION[extname(path)];
+  if (!lang) {
+    return; // Discovered but not formattable yet (e.g. `.html`, no lexer until later).
+  }
+
   totals.scanned += 1;
   try {
     const original = readFileSync(path, 'utf8');
-    const formatted = format(original);
+    const formatted = format(original, {lang});
 
     if (formatted !== original) {
       totals.changed += 1;
     }
 
-    if (nonCommentTokenStream(original) !== nonCommentTokenStream(formatted)) {
+    if (nonCommentTokenStream(original, lang) !== nonCommentTokenStream(formatted, lang)) {
       invarianceViolations.push({path});
     }
   } catch (error) {
@@ -113,8 +146,8 @@ function scanOneFile(
  * `nonCommentTokenStream` in `test/props/invariants.test.ts`, just against real files instead of
  * generated ones.
  */
-function nonCommentTokenStream(source: string): string {
-  const comments = findComments(source);
+function nonCommentTokenStream(source: string, lang: Lang): string {
+  const comments: readonly Comment[] = lang === 'css' ? findCommentsCss(source) : findCommentsJs(source);
   let residual = source;
   for (let i = comments.length - 1; i >= 0; i -= 1) {
     const comment = comments[i];
@@ -125,34 +158,35 @@ function nonCommentTokenStream(source: string): string {
   return residual.replace(/\s+/gu, '');
 }
 
-/** Recursively yields every formattable file under `root`, skipping `.git` only (not `node_modules`). */
-function* walkFiles(root: string): Generator<string> {
-  for (const entry of readEntries(root)) {
+/**
+ * Recursively yields every discoverable file under `root` (any extension `LANG_BY_EXTENSION`
+ * knows, plus `.html` so it's at least counted even before it has a lexer), skipping `.git` only
+ * (not `node_modules`). A descendant directory that goes unreadable partway through (permissions,
+ * a broken symlink, a race with something deleting it mid-scan) is recorded into `errors` and
+ * skipped, not allowed to throw out of the generator: one bad directory deep in a 589,000-file
+ * corpus shouldn't abort every root still left to scan, and `main()` already fails the run overall
+ * whenever `errors` is non-empty.
+ */
+function* walkFiles(root: string, errors: FileError[]): Generator<string> {
+  let entries: Dirent<string>[];
+  try {
+    entries = readdirSync(root, {withFileTypes: true});
+  } catch (error) {
+    errors.push({path: root, message: `Could not read directory: ${(error as Error).message}`});
+    return;
+  }
+
+  for (const entry of entries) {
     const path = join(root, entry.name);
     if (entry.isDirectory()) {
       if (!DIRECTORIES_TO_SKIP.has(entry.name)) {
-        yield* walkFiles(path);
+        yield* walkFiles(path, errors);
       }
       continue;
     }
-    if (entry.isFile() && FORMATTABLE_EXTENSIONS.has(extname(entry.name))) {
+    if (entry.isFile() && (LANG_BY_EXTENSION[extname(path)] || extname(path) === '.html')) {
       yield path;
     }
-  }
-}
-
-/**
- * Wraps `readdirSync` in its own try/catch, inlined into the call itself (rather than assigned
- * through an explicit `ReturnType<typeof readdirSync>`-annotated variable) so TypeScript resolves
- * the string-returning `Dirent[]` overload instead of the generic buffer-encoding one.
- */
-function readEntries(root: string): Dirent<string>[] {
-  try {
-    return readdirSync(root, {withFileTypes: true});
-  } catch (error) {
-    // A root that doesn't exist or isn't readable is a usage error worth surfacing immediately,
-    // not silently skipping and reporting zero files scanned as if the corpus were empty.
-    throw new Error(`Could not read directory ${root}: ${(error as Error).message}`);
   }
 }
 

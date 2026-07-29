@@ -1,0 +1,8 @@
+@media /*
+        * a genuinely long comment that pushes this media query
+        * condition well past the one hundred and ten column limit
+        */ (min-width: 768px) {
+  .panel {
+    display: flex;
+  }
+}

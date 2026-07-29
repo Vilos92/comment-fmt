@@ -7,9 +7,9 @@ import {parseArgs} from 'node:util';
 import {DEFAULT_MAX_LENGTH, DEFAULT_TARGET_LENGTH} from '../core/constants.ts';
 import {measure} from '../core/measure.ts';
 import {ASCII_BOX_OR_TREE, BOX_DRAWING_CHARS, HAS_PIPE} from '../core/predicates.ts';
-import {format} from '../index.ts';
-import {findComments} from '../lang/js.ts';
-import type {Comment} from '../lang/types.ts';
+import {format, type Lang} from '../index.ts';
+import {findComments as findCommentsCss} from '../lang/css.ts';
+import {findComments as findCommentsJs} from '../lang/js.ts';
 
 // comment-fmt-ignore
 /*
@@ -65,11 +65,21 @@ type DiffOp = {readonly kind: DiffOpKind; readonly line: string};
 const CONFIG_FILE_NAME = 'comment-fmt.json';
 
 /**
- * Extensions `format()` actually knows how to reflow. Only `lang/js.ts` exists so far (CSS and
- * HTML lexers are a later phase), so anything discovered outside this set is silently left alone
- * rather than reported as checked, written, or diffed.
+ * Extensions `format()` actually knows how to reflow. HTML has no lexer yet (plan §12 Phase 6's
+ * other half), so anything discovered outside this set is silently left alone rather than
+ * reported as checked, written, or diffed.
  */
-const FORMATTABLE_EXTENSIONS: ReadonlySet<string> = new Set(['.js', '.jsx', '.ts', '.tsx']);
+const FORMATTABLE_EXTENSIONS: ReadonlySet<string> = new Set(['.js', '.jsx', '.ts', '.tsx', '.css', '.scss']);
+
+/** Which `Lang` (plan §4) `format()` should use for a given formattable extension. */
+const LANG_BY_EXTENSION: Readonly<Record<string, Lang>> = {
+  '.js': 'js',
+  '.jsx': 'js',
+  '.ts': 'js',
+  '.tsx': 'js',
+  '.css': 'css',
+  '.scss': 'css'
+};
 
 /**
  * Full future language scope (plan §4/§12 Phase 6), used only to decide what file discovery turns
@@ -244,6 +254,7 @@ function formatFile(path: string, config: Config): FileResult {
   }
 
   const formatted = format(original, {
+    lang: LANG_BY_EXTENSION[extname(path)],
     maxLength: config.maxLength,
     targetLength: config.targetLength,
     extraDirectives: config.extraDirectives
@@ -439,17 +450,24 @@ function printOverwidthReport(results: readonly FileResult[], config: Config): v
 
 /**
  * Finds every over-width, actually-changed comment in one file's original source and classifies
- * each. Matches original comments to formatted comments positionally: `format()` only ever
- * rewrites a comment's own text in place, so it can't add, remove, or reorder comments, which
- * makes index-alignment between the two `findComments()` passes safe.
+ * each. Deliberately does not try to match original comments to formatted ones by re-lexing the
+ * output and pairing them positionally: a `//` comment that wraps across N physical lines becomes
+ * N separate line comments once re-lexed (each with its own `//`), so the comment count can
+ * legitimately change and there is no safe index to pair against. Instead, a comment counts as
+ * "changed" if its exact original text is no longer present anywhere in the formatted output --
+ * true whenever it was actually reflowed, and never a false positive, since an untouched comment's
+ * text is always still there verbatim at its own position. The only imprecision this trades away
+ * is a file containing two byte-identical over-width comments where just one gets reflowed; a
+ * sampling tool (this is explicitly not a pass/fail check) can afford that over the far worse
+ * failure mode positional matching had of throwing, or silently mismatching, on ordinary input.
  */
 function collectOverwidthFindings(result: FileResult, maxLength: number): OverwidthFinding[] {
-  const originalComments = findComments(result.original);
-  const formattedComments = findComments(result.formatted);
+  const findCommentsForPath =
+    LANG_BY_EXTENSION[extname(result.path)] === 'css' ? findCommentsCss : findCommentsJs;
+  const originalComments = findCommentsForPath(result.original);
 
   const findings: OverwidthFinding[] = [];
-  for (let i = 0; i < originalComments.length; i += 1) {
-    const comment = originalComments[i] as Comment;
+  for (const comment of originalComments) {
     const text = result.original.slice(comment.start, comment.end);
     const lines = text.split('\n');
     const hasOverwidthLine = lines.some(
@@ -458,11 +476,7 @@ function collectOverwidthFindings(result: FileResult, maxLength: number): Overwi
     if (!hasOverwidthLine) {
       continue;
     }
-
-    const formattedText = formattedComments[i]
-      ? result.formatted.slice((formattedComments[i] as Comment).start, (formattedComments[i] as Comment).end)
-      : text;
-    if (formattedText === text) {
+    if (result.formatted.includes(text)) {
       continue; // Protected/exempted (directive, table, comment-fmt-ignore, ...). Not a miss.
     }
 

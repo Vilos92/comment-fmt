@@ -1,0 +1,7 @@
+.label::after {
+  content: "*/";
+  /*
+   * a genuinely long real comment that pushes this
+   * declaration well past the one hundred and ten column limit
+   */
+}

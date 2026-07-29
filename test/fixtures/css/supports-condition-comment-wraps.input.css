@@ -1,0 +1,8 @@
+@supports /*
+           * a genuinely long comment that pushes this supports
+           * condition well past the one hundred and ten column limit
+           */ (display: grid) {
+  .grid {
+    display: grid;
+  }
+}

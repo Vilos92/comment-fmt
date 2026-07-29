@@ -1,0 +1,3 @@
+.label::before {
+  content: "/* not a comment */";
+}
