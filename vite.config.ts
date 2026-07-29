@@ -42,8 +42,11 @@ export default defineConfig({
     sortPackageJson: {sortScripts: true},
     // Fixture pairs are test data, not source. They're deliberately exotic/invalid in places
     // (that's the point), and must stay byte-exact for the snapshot harness. Reformatting one
-    // would silently break what the fixture is asserting.
-    ignorePatterns: ['dist/**', 'test/fixtures/**']
+    // would silently break what the fixture is asserting. `corpus/**` is ephemeral third-party
+    // source cloned by `test/corpus/fetch.sh` (plan §9.3) into a git-ignored directory: not ours
+    // to reformat, and walking 100,000+ real-world files on every `vp check` would also make it
+    // unusably slow.
+    ignorePatterns: ['dist/**', 'test/fixtures/**', 'corpus/**']
   },
   lint: {
     plugins: ['typescript', 'import'],
@@ -57,7 +60,7 @@ export default defineConfig({
       // Gates the explicit `.ts` import-suffix convention required by nodenext resolution.
       'import/extensions': ['error', 'ignorePackages']
     },
-    // Same reasoning as `fmt.ignorePatterns`: fixture content isn't held to house lint/type rules.
-    ignorePatterns: ['test/fixtures/**']
+    // Same reasoning as `fmt.ignorePatterns` above.
+    ignorePatterns: ['test/fixtures/**', 'corpus/**']
   }
 });
