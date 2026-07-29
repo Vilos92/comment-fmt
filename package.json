@@ -1,6 +1,6 @@
 {
   "name": "comment-fmt",
-  "version": "0.1.0",
+  "version": "0.0.0",
   "description": "Reformats comments in JS/TS, CSS/SCSS, and HTML to a fixed width with a consistent block shape.",
   "keywords": [
     "cli",

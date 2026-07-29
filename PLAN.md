@@ -30,11 +30,12 @@ placeholder. All four §9.1 invariants are verified via fast-check, run manually
 than `vp test` (see README's "Known issues" -- that's an upstream blocker, not a gap in that PR).
 
 **PR #3** finished §12 Phase 3's scope: `src/cli/index.ts` (`--check`/`--write`/`--diff`, file
-discovery per §10, the `comment-fmt.json` config surface), version `0.1.0`, and this repo's own
-pre-commit hook wiring (§11, "consumer zero"). It also closed a gap left over from Phase 2: the
-`comment-fmt-ignore` escape hatch (§8.4) only had its self-protecting half implemented until that PR;
-`format()` now honors the file-level, preceding-line, and inline forms for real. `npm publish` itself
-remains a manual step outside any PR (requires an interactive one-time password).
+discovery per §10, the `comment-fmt.json` config surface) and this repo's own pre-commit hook
+wiring (§11, "consumer zero"). It also closed a gap left over from Phase 2: the `comment-fmt-ignore`
+escape hatch (§8.4) only had its self-protecting half implemented until that PR; `format()` now
+honors the file-level, preceding-line, and inline forms for real. Deliberately does **not** bump the
+version or publish to npm: that's deferred until closer to an actual public release, so
+`package.json` stays at `0.0.0` through this phase and the ones after it.
 
 **PR #4 (this one) finishes** §12 Phase 4's scope: `test/corpus/run.ts` (a differential-testing
 harness checking the §9.1.4 code-invariance property over real code, not synthetic fixtures), a
