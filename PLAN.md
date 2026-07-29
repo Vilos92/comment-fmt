@@ -39,10 +39,14 @@ version or publish to npm: that's deferred until closer to an actual public rele
 
 **PR #4 (this one) finishes** §12 Phase 4's scope: `test/corpus/run.ts` (a differential-testing
 harness checking the §9.1.4 code-invariance property over real code, not synthetic fixtures), a
-`--report-overwidth` CLI mode for the §9.3/§8.3 structure-taxonomy sampling pass, and a weekly
-scheduled-only CI workflow over 15 cloned OSS repos (a documented scope reduction from the plan's
-suggested 20-30). Run manually against those 15 repos plus the five consumer repos and their
-`node_modules` (589,350 files total): zero code-invariance violations. Two real, previously-hidden
+`--report-overwidth` CLI mode for the §9.3/§8.3 structure-taxonomy sampling pass, and a
+manual-trigger-only CI workflow over 15 cloned OSS repos (`test/corpus/fetch.sh` is the shared
+repo list both CI and a human use). This deliberately overrides §9.3's original text ("wire this
+as a scheduled CI job") -- a weekly cron was tried and explicitly rejected during review in favor
+of running it by hand (`gh workflow run corpus.yaml`, or the Actions tab) only when a change
+actually warrants it. Also a documented scope reduction from the plan's suggested 20-30 repos. Run
+manually against those 15 repos plus the five consumer repos and their `node_modules` (589,350
+files total): zero code-invariance violations. Two real, previously-hidden
 bugs surfaced by that run and are now fixed with regression fixtures: a protected directive or
 structural marker (an `eslint-disable` comment, a lone fenced-code marker, an `@example` tag) could
 lose its original spacing, or a single-line block comment could get force-split into a spurious

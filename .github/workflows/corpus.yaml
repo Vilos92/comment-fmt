@@ -1,14 +1,13 @@
 name: Differential Corpus
 
-# Weekly and manual only, deliberately not on push/pull_request (plan §9.3: "it's slow and it's a
-# net, not a gate"). This job clones 15 real-world OSS repos fresh and runs the full comment
+# Manual-trigger only, deliberately not on push/pull_request and deliberately not on a schedule
+# (plan §9.3: "it's slow and it's a net, not a gate", but that doesn't require running it
+# unattended on a timer). This job clones 15 real-world OSS repos fresh and runs the full comment
 # formatter against them, which is far too slow and far too noisy (ordinary "files would change"
 # counts are expected and not a failure) to sit in the per-commit path that `continuous-integration.yaml`
-# already covers.
+# already covers. Trigger it explicitly via `gh workflow run corpus.yaml` or the Actions tab when
+# a change warrants re-running the corpus, not on any automatic cadence.
 on:
-  schedule:
-    # Every Monday at 09:00 UTC.
-    - cron: '0 9 * * 1'
   workflow_dispatch:
 
 permissions:
@@ -18,7 +17,7 @@ jobs:
   corpus:
     runs-on: ubuntu-latest
     # Cloning 15 repos plus a full-corpus scan is minutes, not seconds. Generous but bounded, so a
-    # genuine hang still fails instead of burning the whole scheduled-job budget indefinitely.
+    # genuine hang still fails instead of running indefinitely.
     timeout-minutes: 60
 
     steps:
