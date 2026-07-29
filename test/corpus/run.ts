@@ -8,8 +8,10 @@
 // scan that never finished reading every file has nothing meaningful to say about the corpus it
 // skipped. An ordinary "this file would change" count is just the net catching candidates for
 // manual triage or sampling, not a failure by itself. Invoked directly with `bun`
-// (`bun test/corpus/run.ts <root> [...roots]`), not through `vp test`: this is deliberately not
-// part of the per-commit suite (see the weekly-only CI workflow under `.github/workflows/`).
+// (`./test/corpus/fetch.sh && bun test/corpus/run.ts corpus/* node_modules`, where `fetch.sh`
+// clones the standard 15-repo corpus into the git-ignored `corpus/` directory), not through
+// `vp test`: this is deliberately not part of the per-commit suite (see the weekly-only CI
+// workflow under `.github/workflows/`, which calls the same `fetch.sh`).
 import {readFileSync, readdirSync} from 'node:fs';
 import type {Dirent} from 'node:fs';
 import {extname, join} from 'node:path';

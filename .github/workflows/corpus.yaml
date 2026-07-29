@@ -34,34 +34,13 @@ jobs:
 
       - run: vp install
 
-      # 15 repos, not the plan's suggested 20-30 (plan §9.3, §14.11): a practical scope reduction
-      # for CI time/resource budget, not an oversight. The five consumer repos
-      # (scriptlancer, greglinscheid.com, vilos92.com, gdex, grynthia.cat) are deliberately excluded
-      # here too: those are separate private/personal repos this job has no credentials or business
-      # cloning, and that half of §9.3's corpus is run manually/locally instead.
+      # test/corpus/fetch.sh is the single source of truth for the repo list (plan §9.3, §14.11),
+      # so CI and a human repeating the scan locally are guaranteed to test the same corpus. See
+      # that script's own header for the repo list and the reasoning behind it (15, not the plan's
+      # suggested 20-30; the five consumer repos deliberately excluded, since this job has no
+      # credentials or business cloning separate private/personal repos).
       - name: Clone corpus repos
-        run: |
-          mkdir -p corpus
-          for repo in \
-            microsoft/TypeScript \
-            vuejs/core \
-            rollup/rollup \
-            vitejs/vite \
-            eslint/eslint \
-            facebook/react \
-            sveltejs/svelte \
-            prettier/prettier \
-            webpack/webpack \
-            babel/babel \
-            lodash/lodash \
-            expressjs/express \
-            colinhacks/zod \
-            date-fns/date-fns \
-            jestjs/jest \
-          ; do
-            name=$(basename "$repo")
-            git clone --depth 1 "https://github.com/${repo}.git" "corpus/${name}"
-          done
+        run: ./test/corpus/fetch.sh
 
       - name: Run differential corpus scan
         id: corpus-scan
