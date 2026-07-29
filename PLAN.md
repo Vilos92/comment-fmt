@@ -17,8 +17,8 @@ change to reflect progress -- this section is the only part that does.
 | ------------------------ | ----------- | ------------------------------------------------------ |
 | 1 -- Scaffold            | done        | [PR #1](https://github.com/Vilos92/comment-fmt/pull/1) |
 | 2 -- Core + JS lexer     | done        | [PR #2](https://github.com/Vilos92/comment-fmt/pull/2) |
-| 3 -- CLI                 | in this PR  | [PR #3](https://github.com/Vilos92/comment-fmt/pull/3) |
-| 4 -- Differential corpus | not started |                                                        |
+| 3 -- CLI                 | done        | [PR #3](https://github.com/Vilos92/comment-fmt/pull/3) |
+| 4 -- Differential corpus | in this PR  | [PR #4](https://github.com/Vilos92/comment-fmt/pull/4) |
 | 5 -- Block reshape       | not started |                                                        |
 | 6 -- CSS + HTML lexers   | not started |                                                        |
 | 7 -- Rollout and tuning  | not started |                                                        |
@@ -27,18 +27,32 @@ change to reflect progress -- this section is the only part that does.
 **PR #2** finished §12 Phase 2's scope: `core/{constants,measure,predicates,blocks,wrap}.ts` and
 `lang/js.ts`, plus `src/index.ts`'s `format()` wired to the real engine in place of the Phase 1
 placeholder. All four §9.1 invariants are verified via fast-check, run manually through `bun` rather
-than `vp test` (see README's "Known issues" -- that's an upstream blocker, not a gap in that PR). 78
-fixture pairs live under `test/fixtures/js/` as of Phase 3, covering the plan's verified lexer
-breakages, the full §8.1 directive list, JSDoc tag protection, and every bug found during an
-ultrareview pass and the follow-up design work on the orphan guard's tail-rebalance step.
+than `vp test` (see README's "Known issues" -- that's an upstream blocker, not a gap in that PR).
 
-**PR #3 (this one) finishes** §12 Phase 3's scope: `src/cli/index.ts` (`--check`/`--write`/`--diff`,
-file discovery per §10, the `comment-fmt.json` config surface) and this repo's own pre-commit hook
-wiring (§11, "consumer zero"). It also closes a gap left over from Phase 2: the `comment-fmt-ignore`
-escape hatch (§8.4) only had its self-protecting half implemented until this PR; `format()` now
-honors the file-level, preceding-line, and inline forms for real. Deliberately does **not** bump
-the version or publish to npm: that's deferred until closer to an actual public release, so
+**PR #3** finished §12 Phase 3's scope: `src/cli/index.ts` (`--check`/`--write`/`--diff`, file
+discovery per §10, the `comment-fmt.json` config surface) and this repo's own pre-commit hook
+wiring (§11, "consumer zero"). It also closed a gap left over from Phase 2: the `comment-fmt-ignore`
+escape hatch (§8.4) only had its self-protecting half implemented until that PR; `format()` now
+honors the file-level, preceding-line, and inline forms for real. Deliberately does **not** bump the
+version or publish to npm: that's deferred until closer to an actual public release, so
 `package.json` stays at `0.0.0` through this phase and the ones after it.
+
+**PR #4 (this one) finishes** §12 Phase 4's scope: `test/corpus/run.ts` (a differential-testing
+harness checking the §9.1.4 code-invariance property over real code, not synthetic fixtures), a
+`--report-overwidth` CLI mode for the §9.3/§8.3 structure-taxonomy sampling pass, and
+`test/corpus/fetch.sh`, the single source of truth for the 15-repo corpus list. This deliberately
+overrides §9.3's original text ("wire this as a scheduled CI job"): both a weekly cron and a
+manual-trigger-only GitHub Actions workflow were tried and explicitly rejected during review, in
+favor of no CI integration at all -- this is a purely local dev tool (`./test/corpus/fetch.sh &&
+bun test/corpus/run.ts corpus/* node_modules`), run by hand whenever a change actually warrants
+it. Also a documented scope reduction from the plan's suggested 20-30 repos. Run manually against
+those 15 repos plus the five consumer repos and their `node_modules` (589,350 files total): zero
+code-invariance violations. Two real, previously-hidden
+bugs surfaced by that run and are now fixed with regression fixtures: a protected directive or
+structural marker (an `eslint-disable` comment, a lone fenced-code marker, an `@example` tag) could
+lose its original spacing, or a single-line block comment could get force-split into a spurious
+multi-line opener-plus-closer shape, whenever it was over `maxLength` but its content turned out to
+be unwrappable. 84 fixture pairs live under `test/fixtures/js/` as of this PR.
 
 **Once Phase 7 lands, delete this file** -- and before deleting it, sweep every `(plan §N)` citation out
 of the codebase's comments first. It's a handoff document for building the tool, not permanent project
