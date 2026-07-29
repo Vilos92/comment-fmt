@@ -33,11 +33,12 @@ breakages, the full §8.1 directive list, JSDoc tag protection, and every bug fo
 ultrareview pass and the follow-up design work on the orphan guard's tail-rebalance step.
 
 **PR #3 (this one) finishes** §12 Phase 3's scope: `src/cli/index.ts` (`--check`/`--write`/`--diff`,
-file discovery per §10, the `comment-fmt.json` config surface), version `0.1.0`, and this repo's own
-pre-commit hook wiring (§11, "consumer zero"). It also closes a gap left over from Phase 2: the
-`comment-fmt-ignore` escape hatch (§8.4) only had its self-protecting half implemented until this PR;
-`format()` now honors the file-level, preceding-line, and inline forms for real. `npm publish` itself
-is a manual step outside this PR (requires an interactive one-time password).
+file discovery per §10, the `comment-fmt.json` config surface) and this repo's own pre-commit hook
+wiring (§11, "consumer zero"). It also closes a gap left over from Phase 2: the `comment-fmt-ignore`
+escape hatch (§8.4) only had its self-protecting half implemented until this PR; `format()` now
+honors the file-level, preceding-line, and inline forms for real. Deliberately does **not** bump
+the version or publish to npm: that's deferred until closer to an actual public release, so
+`package.json` stays at `0.0.0` through this phase and the ones after it.
 
 **Once Phase 7 lands, delete this file** -- and before deleting it, sweep every `(plan §N)` citation out
 of the codebase's comments first. It's a handoff document for building the tool, not permanent project
