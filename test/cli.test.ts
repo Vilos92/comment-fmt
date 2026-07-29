@@ -9,7 +9,6 @@ import {afterEach, beforeEach, describe, expect, test, vi} from 'vite-plus/test'
 
 import {runCli} from '../src/cli/index.ts';
 
-// comment-fmt-ignore
 /*
  * Constants.
  */
@@ -20,7 +19,6 @@ const OVERFLOWING_COMMENT_LINE =
   '// this comment line is intentionally long enough that it overflows the default one hundred and ten column limit for testing';
 const SHORT_COMMENT_LINE = '// short';
 
-// comment-fmt-ignore
 /*
  * Tests.
  */

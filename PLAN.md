@@ -52,32 +52,59 @@ scan. A CodeRabbit review pass also caught a real positional-matching flaw in `-
 (a wrapped `//` comment legitimately becomes multiple comments once re-lexed, since each physical
 line starts its own `//`) that's fixed as of that PR's final commit.
 
-**PR #5** finished §12 Phase 5's scope: `core/reshape.ts` implements the two-threshold hysteresis
-(`singleLineMaxWidth` / `forceMultilineMinWidth`) that decides whether a block comment collapses to
-one physical line or expands to the multi-line starred form, per §1's block-shape rule -- which,
-until that PR, was only partly enforced: a comment expanding from single-line still put its first
-content word directly on the `/**`/`/*` line. Every block comment now runs through
-`reflowBlockComment` unconditionally, even ones that already fit line-by-line, since fitting isn't
-the same question as already having the right shape. The 589,350-file corpus re-run that phase
-surfaced two more real, previously-unreachable bugs (unreachable before that phase started
-processing every block comment, not just overflowing ones), both fixed with regression fixtures: a
-missing leading-blank-line special case that blocked collapse for completely ordinary short JSDoc
-comments, and a serious one from the corpus scan itself -- a continuation prefix without a trailing
-space (some files use `' *'`, not `' * '`) concatenated directly against content starting with `/`
-(an embedded `// example` line inside a larger comment's prose) formed a literal `*/` and
-prematurely closed the comment, corrupting the file. A self-review pass caught two further issues
-before that PR opened: already-fitting, non-collapsible comments losing meaningful trailing
-whitespace to an unconditional `.trimEnd()`, and the two reshape thresholds silently producing
-nonsensical behavior if a caller passed them in the wrong order relative to each other (now a clear
-thrown error). 90 fixture pairs live under `test/fixtures/js/` as of that PR.
+**PR #5 finishes** §12 Phase 5's scope, revised partway through review from the plan's
+original two-threshold hysteresis design to something simpler and deliberately less aggressive.
+Block shape (§1) is a one-way ratchet, symmetric with how width already works: a single-line
+comment expands to the multi-line starred form when it overflows (the part of §1 that was only
+partly implemented before this PR -- a comment expanding from single-line still put its first
+content word directly on the `/**`/`/*` line), but a multi-line comment that already fits is never
+collapsed back down, no matter how short its content is. `core/reshape.ts` and its hysteresis
+machinery were deleted entirely rather than kept as a configuration option; the whole reason that
+machinery existed was to decide _whether_ to collapse, and once collapsing left the picture there
+was no decision left to make.
+
+This reverses an initial implementation of §1's "comments that fit on one line collapse" language,
+which turned out to have real user-facing costs the plan hadn't anticipated: it silently flattened
+this repo's own multi-line section-comment convention the moment it landed (fixed at the time with
+a `comment-fmt-ignore` annotation on every marker, since reverted along with the behavior that
+required it), and more generally treats a human's or an agent's deliberate choice to write
+something on multiple lines as a mistake to correct rather than an intentional decision to respect.
+Checked against the tooling ecosystem before reverting: this project's own explicitly-cited
+inspiration, `eslint-plugin-comment-length`, defaults to an `"overflow-only"` mode that never
+collapses a fitting multi-line comment, with an opt-in `"compact"` mode for the old behavior; ESLint
+core's own `multiline-comment-style` rule never does width-based collapsing at all. The tool's job
+is rescuing overflow, not having opinions about a comment being more compact than it needs to be.
+
+The 589,350-file corpus re-run this phase (repeated again after the mid-review revision) surfaced
+one real, previously-unreachable bug, fixed with a regression fixture: a continuation prefix
+without a trailing space (some files use `' *'`, not `' * '`) concatenated directly against content
+starting with `/` (an embedded `// example` line inside a larger comment's prose) formed a literal
+`*/` and prematurely closed the comment, corrupting the file. That same corpus run also surfaced a
+separate, unrelated bug worth fixing alongside it: this repo's own pre-commit hook was silently
+rewriting staged `test/fixtures/**` files, since `comment-fmt --write`, unlike `vp check --fix`, has
+no built-in exclusion for explicitly-named files (`ignore` only filters discovery, per §6) and
+lint-staged feeds every staged path explicitly. Fixed with `scripts/staged-write.sh`, a thin wrapper
+that filters fixture paths out before invoking the real CLI. A first version of that wrapper matched
+against `test/fixtures/*`, which silently matched nothing at all: `lint-staged` passes every staged
+path as absolute by default, so the pattern needed a leading `*/` to match regardless of prefix
+length. Caught by a review pass, then confirmed live with a genuinely overflowing fixture staged
+through the real hook. 83 fixture pairs live under `test/fixtures/js/` as of this PR.
+
+Also landed on `test/corpus/run.ts` this phase: a `MAX_FILE_BYTES` skip (2MB) for the rare
+pathological giant file (a synthetic 583,000-line TypeScript stress-test fixture, a 12.6MB minified
+bundle vendored into `node_modules`) whose per-comment reflow cost otherwise dominated total scan
+time without surfacing anything beyond raw scale, every skip reported by path and size rather than
+silently shrinking coverage. The new size check's own `statSync` call is wrapped in the same
+try/catch-and-record pattern as the adjacent `readdirSync`, so a broken symlink or a TOCTOU race
+during a long scan fails that one file, not the run.
 
 **PR #6 (this one) is the CSS half** of §12 Phase 6's scope: `lang/css.ts` (`/* */` and SCSS `//`,
 skipping strings and `url(...)` contents -- including the specific `url(data:...base64,...)`
-adversarial case where a base64 payload can contain a stray `//`). `core/`, `reshape.ts`, the
-escape hatch, and directive protection needed zero changes to work correctly for CSS, confirmed
-directly: this is the payoff of §4's "every lexer returns the same `Comment` shape, so `core/`
-never learns what language it's in" design constraint. `format()` gained an `options.lang: 'js' |
-'css'` dispatch (default `'js'`, so every existing caller keeps working unchanged), and
+adversarial case where a base64 payload can contain a stray `//`). The reflow logic in
+`src/index.ts`, the escape hatch, and directive protection needed zero changes to work correctly for
+CSS, confirmed directly: this is the payoff of §4's "every lexer returns the same `Comment` shape, so
+`core/` never learns what language it's in" design constraint. `format()` gained an `options.lang:
+'js' | 'css'` dispatch (default `'js'`, so every existing caller keeps working unchanged), and
 `src/cli/index.ts`/`test/corpus/run.ts` both learned to route `.css`/`.scss` files to it. The
 589,350+ file corpus re-run (now genuinely exercising CSS/SCSS for the first time, not just JS/TS)
 found zero code-invariance violations, both before and after a self-review pass that extracted

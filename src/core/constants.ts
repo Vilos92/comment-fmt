@@ -1,4 +1,3 @@
-// comment-fmt-ignore
 /*
  * Constants.
  */
@@ -36,23 +35,3 @@ export const DEFAULT_ORPHAN_MIN_RATIO = 0.3;
  * empirical-tuning status as `DEFAULT_ORPHAN_MIN_RATIO` above.
  */
 export const ORPHAN_GUARD_WINDOW_LINES = 3;
-
-/**
- * Above this many columns (collapsed onto one physical line, delimiters included), a block
- * comment expands to the multi-line starred form rather than staying on one line (plan §1, §12
- * Phase 5). Set to `DEFAULT_TARGET_LENGTH`'s value: the same "stay a bit under the hard cap"
- * reasoning as that constant, not a coincidence, but kept as its own named constant rather than a
- * direct reference to it, since a future tuning pass may need to move the two independently (word-
- * wrap fill target vs. block-shape hysteresis are related but distinct concerns).
- */
-export const DEFAULT_SINGLE_LINE_MAX_WIDTH = 105;
-
-/**
- * Below this many columns, a multi-line block comment collapses back to a single line; above it,
- * it stays multi-line regardless of `DEFAULT_SINGLE_LINE_MAX_WIDTH`. Set to `DEFAULT_MAX_LENGTH`'s
- * value: a comment whose collapsed form would exceed the hard cap plainly cannot be single-line.
- * The gap between this and `DEFAULT_SINGLE_LINE_MAX_WIDTH` is the hysteresis band `reshape.ts`
- * documents: it stops a comment from flipping shape on every edit that nudges its collapsed width
- * a single character past a single hard threshold.
- */
-export const DEFAULT_FORCE_MULTILINE_MIN_WIDTH = 110;

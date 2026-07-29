@@ -93,8 +93,9 @@ function computeOwnLine(source: string, start: number): boolean {
 
 /**
  * Heuristic hint for `core/`: if a multi-line block comment's second line starts with `<indent>*`
- * (optionally followed by one space), reuse that prefix. Not a guarantee. `core/` (reshape.ts,
- * phase 5) owns the real decision, this just carries forward what the author already wrote.
+ * (optionally followed by one space), reuse that prefix. Not a guarantee. `src/index.ts`'s
+ * `reflowBlockComment` owns the real decision, this just carries forward what the author already
+ * wrote.
  */
 function computeLinePrefix(source: string, start: number, end: number): string {
   const secondNewline = source.indexOf('\n', start);

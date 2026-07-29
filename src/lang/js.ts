@@ -1,4 +1,3 @@
-// comment-fmt-ignore
 /*
  * Types.
  */
@@ -23,7 +22,6 @@ type TokenCategory = 'value' | 'expr-start';
  */
 type TemplateFrame = {readonly kind: 'text'} | {readonly kind: 'expr'; braceDepth: number};
 
-// comment-fmt-ignore
 /*
  * Constants.
  */
@@ -105,7 +103,6 @@ const RADIX_DIGIT_BY_PREFIX = new Map([
   ['0b', /[01_]/]
 ]);
 
-// comment-fmt-ignore
 /*
  * Entry.
  */
@@ -225,7 +222,6 @@ export function findComments(source: string): Comment[] {
   return comments;
 }
 
-// comment-fmt-ignore
 /*
  * Helpers.
  */
