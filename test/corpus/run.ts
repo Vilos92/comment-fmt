@@ -13,14 +13,13 @@
 // `vp test`. Deliberately not wired into any CI job, scheduled or otherwise: this is slow, noisy
 // by design (an ordinary changed-file count isn't a failure), and meant to be run by hand
 // whenever a change to `core/` or a `lang/*.ts` lexer warrants re-checking against real code.
-import {readFileSync, readdirSync} from 'node:fs';
+import {readFileSync, readdirSync, statSync} from 'node:fs';
 import type {Dirent} from 'node:fs';
 import {extname, join} from 'node:path';
 
 import {format} from '../../src/index.ts';
 import {findComments} from '../../src/lang/js.ts';
 
-// comment-fmt-ignore
 /*
  * Types.
  */
@@ -39,7 +38,11 @@ type FileError = {
   readonly message: string;
 };
 
-// comment-fmt-ignore
+type SkippedLargeFile = {
+  readonly path: string;
+  readonly bytes: number;
+};
+
 /*
  * Constants.
  */
@@ -50,7 +53,22 @@ const DIRECTORIES_TO_SKIP: ReadonlySet<string> = new Set(['.git']);
 
 const FORMATTABLE_EXTENSIONS: ReadonlySet<string> = new Set(['.js', '.jsx', '.ts', '.tsx']);
 
-// comment-fmt-ignore
+/**
+ * Above this size, a file is skipped rather than scanned, and the skip is counted and reported
+ * (never silent). `format()`'s main reflow loop, and this harness's own `nonCommentTokenStream`
+ * check, both repeatedly slice and reassemble the *entire* source string once per comment found --
+ * fine for ordinary hand-written source, but it scales badly for the handful of genuinely enormous
+ * files real corpora contain: a synthetic 583,000-line stress-test fixture in TypeScript's own test
+ * suite (single-handedly ~90% of that repo's total scan time), or a 12.6MB minified/bundled
+ * dependency vendored into `node_modules`. Neither is going to surface a new lexer edge case beyond
+ * raw scale, so skipping them trades a small, known coverage gap for the scan actually finishing in
+ * a reasonable time. 2MB comfortably clears every ordinary hand-written or generated source file
+ * seen in this project's own corpus runs (e.g. TypeScript's 3.15MB `dom.generated.d.ts` is real,
+ * legitimate content that happens to sit just over this line too -- an acceptable trade for a single
+ * simple threshold over hand-tuning around one borderline file).
+ */
+const MAX_FILE_BYTES = 2 * 1024 * 1024;
+
 /*
  * Entry.
  */
@@ -77,17 +95,18 @@ function main(): void {
   const totals: ScanTotals = {scanned: 0, changed: 0};
   const invarianceViolations: InvarianceViolation[] = [];
   const errors: FileError[] = [];
+  const skippedLargeFiles: SkippedLargeFile[] = [];
 
   // One file at a time: `walkFiles` is a generator so this never holds the whole corpus's file
   // list, let alone file contents, in memory at once. Only the small running totals/violation/
   // error arrays above accumulate across tens of thousands of files.
   for (const root of roots) {
-    for (const path of walkFiles(root, errors)) {
+    for (const path of walkFiles(root, errors, skippedLargeFiles)) {
       scanOneFile(path, totals, invarianceViolations, errors);
     }
   }
 
-  printReport(totals, invarianceViolations, errors);
+  printReport(totals, invarianceViolations, errors, skippedLargeFiles);
   // A code-invariance violation is the most severe finding this harness treats as fatal (plan
   // §9.3). A file that errored partway through (unreadable, or a genuine crash in `format()`
   // itself) also fails the run: reporting a clean pass over a scan that never actually finished
@@ -99,7 +118,6 @@ function main(): void {
 
 main();
 
-// comment-fmt-ignore
 /*
  * Helpers.
  */
@@ -152,9 +170,15 @@ function nonCommentTokenStream(source: string): string {
  * a broken symlink, a race with something deleting it mid-scan) is recorded into `errors` and
  * skipped, not allowed to throw out of the generator: one bad directory deep in a 589,000-file
  * corpus shouldn't abort every root still left to scan, and `main()` already fails the run overall
- * whenever `errors` is non-empty.
+ * whenever `errors` is non-empty. A file over `MAX_FILE_BYTES` is recorded into
+ * `skippedLargeFiles` and skipped the same way, but never counts against the run's exit code:
+ * unlike an unreadable directory, this is an intentional, reported trade-off, not a failure.
  */
-function* walkFiles(root: string, errors: FileError[]): Generator<string> {
+function* walkFiles(
+  root: string,
+  errors: FileError[],
+  skippedLargeFiles: SkippedLargeFile[]
+): Generator<string> {
   let entries: Dirent<string>[];
   try {
     entries = readdirSync(root, {withFileTypes: true});
@@ -167,11 +191,25 @@ function* walkFiles(root: string, errors: FileError[]): Generator<string> {
     const path = join(root, entry.name);
     if (entry.isDirectory()) {
       if (!DIRECTORIES_TO_SKIP.has(entry.name)) {
-        yield* walkFiles(path, errors);
+        yield* walkFiles(path, errors, skippedLargeFiles);
       }
       continue;
     }
     if (entry.isFile() && FORMATTABLE_EXTENSIONS.has(extname(entry.name))) {
+      let bytes: number;
+      try {
+        bytes = statSync(path).size;
+      } catch (error) {
+        // A broken symlink or a TOCTOU race (the file vanishing between readdir and stat) fails
+        // this one file's size check, not the whole scan: recorded the same way `readdirSync`
+        // failures are, then move on to the next entry.
+        errors.push({path, message: `Could not stat file: ${(error as Error).message}`});
+        continue;
+      }
+      if (bytes > MAX_FILE_BYTES) {
+        skippedLargeFiles.push({path, bytes});
+        continue;
+      }
       yield path;
     }
   }
@@ -180,7 +218,8 @@ function* walkFiles(root: string, errors: FileError[]): Generator<string> {
 function printReport(
   totals: ScanTotals,
   invarianceViolations: readonly InvarianceViolation[],
-  errors: readonly FileError[]
+  errors: readonly FileError[],
+  skippedLargeFiles: readonly SkippedLargeFile[]
 ): void {
   // Code-invariance violations are surfaced first and loudest (plan §9.3: "worth stopping the
   // world for"), never buried alongside routine "file would change" noise.
@@ -204,11 +243,21 @@ function printReport(
   process.stdout.write(`Files changed:               ${totals.changed}\n`);
   process.stdout.write(`Code-invariance violations:  ${invarianceViolations.length}\n`);
   process.stdout.write(`Files errored:               ${errors.length}\n`);
+  process.stdout.write(`Files skipped (too large):   ${skippedLargeFiles.length}\n`);
 
   if (errors.length > 0) {
     process.stdout.write('\nErrored files:\n');
     for (const fileError of errors) {
       process.stdout.write(`  ${fileError.path}: ${fileError.message}\n`);
+    }
+  }
+
+  // Never a silent cap: every file this run declined to scan is named here, with its size, so a
+  // skip is always visible in the output rather than quietly shrinking coverage.
+  if (skippedLargeFiles.length > 0) {
+    process.stdout.write(`\nSkipped files (over ${(MAX_FILE_BYTES / (1024 * 1024)).toFixed(0)}MB):\n`);
+    for (const skipped of skippedLargeFiles) {
+      process.stdout.write(`  ${skipped.path}: ${(skipped.bytes / (1024 * 1024)).toFixed(1)}MB\n`);
     }
   }
 }

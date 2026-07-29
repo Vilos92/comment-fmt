@@ -56,8 +56,6 @@ Section markers are **multi-line block comments** (sentence-case label + period)
 
 Do **not** collapse these to single-line `/* Types. */`. Skip markers entirely on lean single-export files where they'd add ceremony only. Order (omit unused; no empty **Types.** / **Helpers.**):
 
-Precede every section marker with `// comment-fmt-ignore` (plan §8.4's escape hatch), once this repo's own pre-commit hook starts running `comment-fmt` on it (Phase 3 onward). Without it, `comment-fmt` collapses a short marker like `Types.` to single-line on its own, since a bare section label is syntactically indistinguishable from ordinary short prose it's supposed to collapse (plan §1, §12 Phase 5) — there's no signal in the text itself marking it as structural. This was found by dogfooding the tool on its own source the moment block-reshape landed.
-
 1. **Types.** · **Constants.**
 2. **Entry.** for the module's primary export, or **Config.** for `vite.config.ts`. Not **Script.** /
    **Component.** / **Styles.** — those are scriptlancer/greglinscheid.com labels for browser bootstrap

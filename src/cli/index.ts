@@ -10,7 +10,6 @@ import {ASCII_BOX_OR_TREE, BOX_DRAWING_CHARS, HAS_PIPE} from '../core/predicates
 import {format} from '../index.ts';
 import {findComments} from '../lang/js.ts';
 
-// comment-fmt-ignore
 /*
  * Types.
  */
@@ -56,7 +55,6 @@ type DiffOpKind = 'context' | 'add' | 'remove';
 
 type DiffOp = {readonly kind: DiffOpKind; readonly line: string};
 
-// comment-fmt-ignore
 /*
  * Constants.
  */
@@ -120,7 +118,6 @@ const OVERWIDTH_ALIGNED_MIN_LINES = 2;
 
 const OVERWIDTH_MAX_EXAMPLES_PER_GROUP = 5;
 
-// comment-fmt-ignore
 /*
  * Entry.
  */
@@ -211,7 +208,6 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   process.exit(exitCode);
 }
 
-// comment-fmt-ignore
 /*
  * Helpers.
  */

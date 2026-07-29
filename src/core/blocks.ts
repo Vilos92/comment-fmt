@@ -6,7 +6,6 @@ import {
   checkIsTagLine
 } from './predicates.ts';
 
-// comment-fmt-ignore
 /*
  * Types.
  */
@@ -22,14 +21,12 @@ export type Block = {
   readonly protected: boolean;
 };
 
-// comment-fmt-ignore
 /*
  * Constants.
  */
 
 const LIST_MARKER = /^\s*([-*+]|\d+[.)])\s/;
 
-// comment-fmt-ignore
 /*
  * Entry.
  */

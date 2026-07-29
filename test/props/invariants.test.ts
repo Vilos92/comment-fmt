@@ -10,14 +10,12 @@ import {checkIsTableLike} from '../../src/core/predicates.ts';
 import {format} from '../../src/index.ts';
 import {findComments} from '../../src/lang/js.ts';
 
-// comment-fmt-ignore
 /*
  * Types.
  */
 
 type CommentKind = 'line' | 'block-single' | 'block-multi';
 
-// comment-fmt-ignore
 /*
  * Constants.
  */
@@ -54,7 +52,6 @@ const snippetArb = fc
     return `${comment}\nconst x = 1;\n`;
   });
 
-// comment-fmt-ignore
 /*
  * Tests.
  */
@@ -102,7 +99,6 @@ describe('invariants', () => {
   });
 });
 
-// comment-fmt-ignore
 /*
  * Helpers.
  */

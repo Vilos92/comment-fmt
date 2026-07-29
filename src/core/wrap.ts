@@ -7,7 +7,6 @@ import {
 } from './constants.ts';
 import {measure} from './measure.ts';
 
-// comment-fmt-ignore
 /*
  * Types.
  */
@@ -19,7 +18,6 @@ export type WrapOptions = {
   readonly extraDirectives?: readonly string[];
 };
 
-// comment-fmt-ignore
 /*
  * Entry.
  */
@@ -63,7 +61,6 @@ export function wrap(lines: readonly string[], linePrefixWidth: number, options:
   });
 }
 
-// comment-fmt-ignore
 /*
  * Helpers.
  */

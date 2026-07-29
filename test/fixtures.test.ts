@@ -14,7 +14,6 @@ import {describe, expect, test} from 'vite-plus/test';
 
 import {format} from '../src/index.ts';
 
-// comment-fmt-ignore
 /*
  * Types.
  */
@@ -27,7 +26,6 @@ type FixtureCase = {
   expectedPath: string;
 };
 
-// comment-fmt-ignore
 /*
  * Constants.
  */
@@ -37,7 +35,6 @@ const FIXTURES_DIR = fileURLToPath(new URL('./fixtures', import.meta.url));
 const INPUT_MARKER = '.input.';
 const UPDATE_SNAPSHOTS = process.env.UPDATE_SNAPSHOTS === '1';
 
-// comment-fmt-ignore
 /*
  * Tests.
  */
@@ -80,7 +77,6 @@ for (const lang of LANGS) {
   });
 }
 
-// comment-fmt-ignore
 /*
  * Helpers.
  */

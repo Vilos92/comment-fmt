@@ -1,4 +1,3 @@
-// comment-fmt-ignore
 /*
  * Types.
  */

@@ -1,28 +1,16 @@
 import {splitIntoBlocks} from './core/blocks.ts';
-import {
-  DEFAULT_FORCE_MULTILINE_MIN_WIDTH,
-  DEFAULT_MAX_LENGTH,
-  DEFAULT_SINGLE_LINE_MAX_WIDTH
-} from './core/constants.ts';
+import {DEFAULT_MAX_LENGTH} from './core/constants.ts';
 import {measure} from './core/measure.ts';
-import {checkIsCollapsible, decideBlockShape, type BlockShape} from './core/reshape.ts';
 import {wrap, type WrapOptions} from './core/wrap.ts';
 import {findComments} from './lang/js.ts';
 import type {Comment} from './lang/types.ts';
 
-// comment-fmt-ignore
 /*
  * Types.
  */
 
-export type FormatOptions = WrapOptions & {
-  /** Plan §12 Phase 5's single-line collapse threshold. Not part of the §6 config surface. */
-  readonly singleLineMaxWidth?: number;
-  /** Plan §12 Phase 5's force-multiline threshold. Not part of the §6 config surface. */
-  readonly forceMultilineMinWidth?: number;
-};
+export type FormatOptions = WrapOptions;
 
-// comment-fmt-ignore
 /*
  * Constants.
  */
@@ -57,7 +45,6 @@ const IGNORE_MARKER = /comment-fmt-ignore(?!-file)\b/;
  */
 const IGNORE_MARKER_WHOLE_COMMENT = /^comment-fmt-ignore(\s*(--|:)\s*\S.*)?$/;
 
-// comment-fmt-ignore
 /*
  * Entry.
  */
@@ -95,7 +82,6 @@ export function format(source: string, options: FormatOptions = {}): string {
   return result;
 }
 
-// comment-fmt-ignore
 /*
  * Helpers.
  */
@@ -167,18 +153,20 @@ function reflowComment(source: string, comment: Comment, options: FormatOptions)
   const raw = source.slice(comment.start, comment.end);
   const maxLength = options.maxLength ?? DEFAULT_MAX_LENGTH;
 
-  if (comment.kind === 'line') {
-    return fitsWithinLimit(raw, comment.indent, maxLength) ? raw : reflowLineComment(comment, raw, options);
+  // Block shape (plan §1) is a one-way ratchet driven only by overflow, the same as width
+  // already is: a comment expands from single-line to the starred multi-line form when it
+  // overflows, but a multi-line comment that already fits is never collapsed back down, no
+  // matter how short its content is. That makes "every physical line already fits" the whole
+  // answer for both comment kinds, so both share this one short-circuit. Whatever shape a human
+  // (or an agent) deliberately chose is left alone as long as it fits; the tool only ever rescues
+  // overflow, it doesn't have opinions about a comment being "more compact than it needs to be."
+  if (fitsWithinLimit(raw, comment.indent, maxLength)) {
+    return raw;
   }
 
-  // Block comments always run through reflowBlockComment, even when every physical line already
-  // fits maxLength: line comments have only one shape, so "every line fits" is the whole answer,
-  // but a block comment also has a shape decision (plan §1, §12 Phase 5) that "fits" alone doesn't
-  // settle. A short multi-line comment that already fits line-by-line may still need to collapse
-  // to single-line, so the same step-0 short-circuit line comments get can't apply here.
-  // reflowBlockComment reconstructs byte-identical output on its own when nothing actually needs
-  // to change, so this doesn't cost the "untouched majority case" the step-0 gate protects.
-  return reflowBlockComment(comment, raw, options);
+  return comment.kind === 'line'
+    ? reflowLineComment(comment, raw, options)
+    : reflowBlockComment(comment, raw, options);
 }
 
 function fitsWithinLimit(raw: string, indent: number, maxLength: number): boolean {
@@ -222,16 +210,19 @@ function reflowLineComment(comment: Comment, raw: string, options: FormatOptions
 }
 
 /**
- * Reflows a block comment (`/*`- or `/**`-opened) by extracting its content lines, deciding
- * whether it should collapse onto one physical line or take the multi-line starred form (plan §1,
- * §12 Phase 5), and reassembling the delimiters and continuation prefix around the result. The
- * opening and closing lines never carry content, per plan §1's block-shape rule: every content
- * line, including what would once have been "line 0" right after `open`, gets its own line with
+ * Reflows a block comment (`/*`- or `/**`-opened). Block shape (plan §1) is a one-way ratchet:
+ * this function is only ever reached when something overflows (see the shared short-circuit in
+ * `reflowComment`), so there is no "should this collapse" decision to make here at all, only "does
+ * this need to expand or rewrap." A comment that was already single-line expands to the multi-line
+ * starred form; one that was already multi-line stays multi-line and gets its content rewrapped in
+ * place, never collapsed back down even if the rewrapped content would technically fit on one
+ * line. The opening and closing lines never carry content, per plan §1: every content line,
+ * including what would once have been "line 0" right after `open`, gets its own line with
  * `continuationPrefix` applied, exactly like every other content line. Handles both an already
  * multi-line comment (reusing its detected `linePrefix`) and one expanding from single-line for
  * the first time (synthesizing one via `DEFAULT_BLOCK_PREFIX`), and both a properly terminated
  * comment and an unterminated one (malformed/truncated source, which has no closing delimiter to
- * reconstruct and is never a collapse candidate).
+ * reconstruct).
  */
 function reflowBlockComment(comment: Comment, raw: string, options: FormatOptions): string {
   const terminated = comment.close.length > 0;
@@ -247,7 +238,6 @@ function reflowBlockComment(comment: Comment, raw: string, options: FormatOption
     : raw.slice(comment.open.length);
   const physicalLines = inner.split('\n');
   const wasSingleLine = physicalLines.length === 1;
-  const currentShape: BlockShape = wasSingleLine ? 'single-line' : 'multi-line';
 
   // A comment already spanning multiple physical lines carries its own detected `linePrefix`
   // (full leading whitespace already included, per `computeLinePrefix` in lang/js.ts). One that's
@@ -265,71 +255,32 @@ function reflowBlockComment(comment: Comment, raw: string, options: FormatOption
     idx === 0 ? line.replace(/^[ \t]+/, '') : stripLinePrefix(line, continuationPrefix)
   );
   // A multi-line comment's own line 0 (right after `open`) is empty by convention, not a
-  // deliberate blank-line paragraph break the way one further down would be. Left in, it reads to
-  // `splitIntoBlocks` as its own separate blank-line block, which both blocks collapsibility for
-  // completely ordinary short comments and leaks a spurious blank continuation line into the
-  // reconstruction below. Dropping it here is safe: `wrap()` pools every content line's words and
-  // re-splits them regardless of original line boundaries, so this placeholder carries no
-  // information a real blank line elsewhere in the body doesn't already carry on its own.
-  const openerWasBare = !wasSingleLine && rawContentLines[0] === '';
+  // deliberate blank-line paragraph break the way one further down would be. Left in, `wrap()`'s
+  // own internal block-splitting reads it as its own separate blank-line block, which leaks a
+  // spurious blank continuation line into the reconstruction below. Dropping it here is safe:
+  // `wrap()` pools every content line's words and re-splits them regardless of original line
+  // boundaries, so this placeholder carries no information a real blank line elsewhere in the
+  // body doesn't already carry on its own.
   const contentLines =
-    openerWasBare && rawContentLines.length > 1 ? rawContentLines.slice(1) : rawContentLines;
+    !wasSingleLine && rawContentLines.length > 1 && rawContentLines[0] === ''
+      ? rawContentLines.slice(1)
+      : rawContentLines;
   const extraDirectives = options.extraDirectives ?? [];
-
-  // Whether a real shape decision (plan §12 Phase 5) was even attempted, as opposed to skipped
-  // because there was nothing to decide between (protected content, multiple blocks, or an
-  // unterminated comment with no closer to complete a single-line form). Tracked so the
-  // wrapped.length === 1 fallback below never overrides an explicit "stay multi-line" decision
-  // made here just because the content also happens to fit the narrower continuation budget.
-  const isCollapsible = terminated && checkIsCollapsible(contentLines, extraDirectives);
-  if (isCollapsible) {
-    const collapsed = tryCollapseToSingleLine(comment, contentLines, currentShape, options);
-    if (collapsed !== undefined) {
-      return collapsed;
-    }
-  }
 
   // Every content line now shares one budget: `continuationPrefix`'s width. Nothing is ever
   // attached to `open` any more, so there's no separate, wider budget line 0 alone would have
   // needed under the old opener-attaches-content design.
   const wrapped = wrap(contentLines, measure(continuationPrefix), options);
-  if (!isCollapsible && openerWasBare && checkArraysEqual(wrapped, contentLines)) {
-    // Nothing here needed to change: the opener was already bare (no plan §1 violation to fix)
-    // and `wrap()` made no change to the content, so this comment would never have reached
-    // `reflowBlockComment` at all before plan §12 Phase 5 started calling it unconditionally to
-    // catch collapse candidates. Reconstructing below anyway would risk `.trimEnd()` silently
-    // stripping a content line's meaningful trailing whitespace even though nothing about the
-    // comment's shape or wrapping needed to change, contradicting this function's own documented
-    // "byte-identical when nothing needs to change" guarantee. Return the untouched original.
-    return raw;
-  }
   if (
     wrapped.length === 1 &&
     wrapped[0] === contentLines[0] &&
     checkIsProtectedLine(contentLines[0] ?? '', extraDirectives)
   ) {
     // `wrap()` left this untouched specifically because it's protected (plan §8.1/§8.3), not
-    // merely because it already fits its own budget. Reconstructing below (either form) would
-    // lose the comment's original leading whitespace even though a protected directive must be
-    // preserved byte-for-byte. Return the untouched original instead.
+    // merely because it already fits its own budget. Reconstructing below would lose the
+    // comment's original leading whitespace even though a protected directive must be preserved
+    // byte-for-byte. Return the untouched original instead.
     return raw;
-  }
-
-  if (!isCollapsible && wrapped.length === 1) {
-    // Content fits on one continuation-worthy line, but no shape decision ever ran above (not
-    // collapsible: protected already handled, multiple blocks, or unterminated so there's no
-    // closer to complete a single-line form with). Forcing the bare-opener multi-line shape here
-    // regardless would be wrong: a comment that never needed more than one physical line to begin
-    // with (a short unterminated `/* note`, or one surviving block among several) shouldn't be
-    // split into an opener line plus a separate continuation line for no reason. Render it as one
-    // physical line instead, with the same spacing convention the collapse path above uses. When
-    // `isCollapsible` was true, `decideBlockShape` already had its say (including the hysteresis
-    // gap keeping a comment multi-line on purpose) and must not be second-guessed here just
-    // because this narrower continuation budget also happens to fit the content on one line.
-    const rendered = terminated
-      ? `${comment.open} ${wrapped[0]} ${comment.close}`
-      : `${comment.open} ${wrapped[0]}`;
-    return rendered;
   }
 
   const rest = wrapped.map(line => joinPrefixAndContent(continuationPrefix, line).trimEnd());
@@ -338,58 +289,6 @@ function reflowBlockComment(comment: Comment, raw: string, options: FormatOption
     : [comment.open, ...rest];
 
   return lines.join('\n');
-}
-
-/**
- * Attempts the plan §1/§12 Phase 5 single-line collapse for a comment whose content is a single
- * non-protected block (already confirmed by the caller via `checkIsCollapsible`). Returns
- * `undefined` when `decideBlockShape` calls for the multi-line form instead, so the caller falls
- * through to the normal reconstruction path.
- *
- * Both thresholds are clamped to `maxLength`: they default to values already `<= DEFAULT_MAX_LENGTH`,
- * but a caller configuring a smaller `maxLength` without also adjusting them (they're deliberately
- * not part of the §6 config surface) must never see a single-line result wider than the hard cap
- * they actually asked for.
- */
-function tryCollapseToSingleLine(
-  comment: Comment,
-  contentLines: readonly string[],
-  currentShape: BlockShape,
-  options: FormatOptions
-): string | undefined {
-  const words = contentLines
-    .join(' ')
-    .trim()
-    .split(/\s+/u)
-    .filter(word => word.length > 0);
-  if (words.length === 0) {
-    return undefined;
-  }
-
-  const maxLength = options.maxLength ?? DEFAULT_MAX_LENGTH;
-  const singleLineMaxWidth = Math.min(options.singleLineMaxWidth ?? DEFAULT_SINGLE_LINE_MAX_WIDTH, maxLength);
-  const forceMultilineMinWidth = Math.min(
-    options.forceMultilineMinWidth ?? DEFAULT_FORCE_MULTILINE_MIN_WIDTH,
-    maxLength
-  );
-  // Each threshold is independently sane once clamped to maxLength, but nothing above stops a
-  // caller from passing them in the wrong order relative to each other (e.g. a forceMultilineMinWidth
-  // below the default singleLineMaxWidth). Left unchecked, decideBlockShape's first branch
-  // (collapsedWidth <= singleLineMaxWidth) would silently win for any width in the resulting
-  // inverted gap, quietly ignoring the caller's forceMultilineMinWidth override rather than ever
-  // running in a misleading state (this repo's fail-fast convention).
-  if (forceMultilineMinWidth < singleLineMaxWidth) {
-    throw new Error(
-      `forceMultilineMinWidth (${forceMultilineMinWidth}) must be >= singleLineMaxWidth (${singleLineMaxWidth}).`
-    );
-  }
-
-  const joined = words.join(' ');
-  const collapsedWidth =
-    comment.indent + measure(comment.open) + 1 + measure(joined) + 1 + measure(comment.close);
-  const shape = decideBlockShape(collapsedWidth, currentShape, singleLineMaxWidth, forceMultilineMinWidth);
-
-  return shape === 'single-line' ? `${comment.open} ${joined} ${comment.close}` : undefined;
 }
 
 /**
@@ -424,10 +323,6 @@ function joinPrefixAndContent(prefix: string, content: string): string {
 function checkIsProtectedLine(line: string, extraDirectives: readonly string[] | undefined): boolean {
   const blocks = splitIntoBlocks([line], extraDirectives ?? []);
   return blocks[0]?.protected ?? false;
-}
-
-function checkArraysEqual(a: readonly string[], b: readonly string[]): boolean {
-  return a.length === b.length && a.every((line, idx) => line === b[idx]);
 }
 
 function stripLinePrefix(line: string, prefix: string): string {

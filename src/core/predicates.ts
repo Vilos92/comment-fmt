@@ -1,4 +1,3 @@
-// comment-fmt-ignore
 /*
  * Constants.
  */
@@ -81,7 +80,6 @@ const RUN_OF_SPACES = / {2,}/g;
 
 const MIN_ALIGNED_LINES = 3;
 
-// comment-fmt-ignore
 /*
  * Entry.
  */
@@ -151,7 +149,6 @@ export function checkIsTableLike(lines: readonly string[]): boolean {
   );
 }
 
-// comment-fmt-ignore
 /*
  * Helpers.
  */
