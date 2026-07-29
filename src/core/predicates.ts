@@ -69,6 +69,12 @@ export const HAS_PIPE = /\|/;
  * `has-box-drawing` shape this module already detects, without re-deriving the character set.
  */
 export const BOX_DRAWING_CHARS = /[─│┌┐└┘├┤┬┴┼]/;
+
+/**
+ * Exported for the same reason as `BOX_DRAWING_CHARS` above: `--report-overwidth` (plan §9.3)
+ * classifies a comment into the same `has-box-drawing` shape this module already detects, without
+ * re-deriving the pattern.
+ */
 export const ASCII_BOX_OR_TREE = /(\+-{2,}|\|--|├──|└──|`--)/;
 
 const RUN_OF_SPACES = / {2,}/g;

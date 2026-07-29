@@ -82,11 +82,11 @@ jobs:
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
 
-      # Fails the job loudly only on a code-invariance violation (`run.ts` exits 1 in that case,
-      # 0 otherwise). An ordinary "files would change" count is expected and must NOT fail the
-      # build (plan §9.3: this is a net, not a gate).
-      - name: Fail on code-invariance violation
+      # Fails the job loudly on a code-invariance violation or a file that errored partway
+      # through scanning (`run.ts` exits 1 in either case, 0 otherwise). An ordinary "files would
+      # change" count is expected and must NOT fail the build (plan §9.3: this is a net, not a gate).
+      - name: Fail on code-invariance violation or scan error
         if: ${{ steps.corpus-scan.outputs.exit_code != '0' }}
         run: |
-          echo "::error::Code-invariance violation(s) found. See the job summary for details."
+          echo "::error::Code-invariance violation(s) or scan error(s) found. See the job summary for details."
           exit 1
