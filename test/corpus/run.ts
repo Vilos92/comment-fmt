@@ -10,8 +10,9 @@
 // manual triage or sampling, not a failure by itself. Invoked directly with `bun`
 // (`./test/corpus/fetch.sh && bun test/corpus/run.ts corpus/* node_modules`, where `fetch.sh`
 // clones the standard 15-repo corpus into the git-ignored `corpus/` directory), not through
-// `vp test`: this is deliberately not part of the per-commit suite (see the weekly-only CI
-// workflow under `.github/workflows/`, which calls the same `fetch.sh`).
+// `vp test`. Deliberately not wired into any CI job, scheduled or otherwise: this is slow, noisy
+// by design (an ordinary changed-file count isn't a failure), and meant to be run by hand
+// whenever a change to `core/` or a `lang/*.ts` lexer warrants re-checking against real code.
 import {readFileSync, readdirSync} from 'node:fs';
 import type {Dirent} from 'node:fs';
 import {extname, join} from 'node:path';
