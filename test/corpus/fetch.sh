@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# Single source of truth for the differential-corpus repo list (plan §9.3, §14.11). Both
-# .github/workflows/corpus.yaml and a human repeating the scan locally call this script, so the
-# two never drift into scanning different corpora. Shallow-clones each repo into ./corpus/ (fast,
-# small, and git-ignored: this is ephemeral scratch data, never committed).
+# Single source of truth for the differential-corpus repo list (plan §9.3, §14.11), so repeated
+# local runs always scan the same corpus. Deliberately local-only: this is not wired into any CI
+# job. Shallow-clones each repo into ./corpus/ (fast, small, and git-ignored: this is ephemeral
+# scratch data, never committed).
 #
 # Usage:
 #   ./test/corpus/fetch.sh
