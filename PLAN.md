@@ -39,14 +39,17 @@ version or publish to npm: that's deferred until closer to an actual public rele
 
 **PR #4** finished §12 Phase 4's scope: `test/corpus/run.ts` (a differential-testing harness
 checking the §9.1.4 code-invariance property over real code, not synthetic fixtures), a
-`--report-overwidth` CLI mode for the §9.3/§8.3 structure-taxonomy sampling pass, and a weekly
-scheduled-only CI workflow over 15 cloned OSS repos (a documented scope reduction from the plan's
-suggested 20-30). Run manually against those 15 repos plus the five consumer repos and their
-`node_modules` (589,350 files): zero code-invariance violations, both then and after every
-subsequent phase's own re-run of the same scan. A CodeRabbit review pass also caught a real
-positional-matching flaw in `--report-overwidth` (a wrapped `//` comment legitimately becomes
-multiple comments once re-lexed, since each physical line starts its own `//`) that's fixed as of
-that PR's final commit.
+`--report-overwidth` CLI mode for the §9.3/§8.3 structure-taxonomy sampling pass, and a
+manual-trigger-only CI workflow over 15 cloned OSS repos (`test/corpus/fetch.sh` is the shared
+repo list both CI and a human use). This deliberately overrides §9.3's original text ("wire this
+as a scheduled CI job") -- a weekly cron was tried and explicitly rejected during review in favor
+of running it by hand (`gh workflow run corpus.yaml`, or the Actions tab) only when a change
+actually warrants it. Also a documented scope reduction from the plan's suggested 20-30 repos. Run
+manually against those 15 repos plus the five consumer repos and their `node_modules` (589,350
+files total): zero code-invariance violations, both then and after every subsequent phase's own
+re-run of the same scan. A CodeRabbit review pass also caught a real positional-matching flaw in
+`--report-overwidth` (a wrapped `//` comment legitimately becomes multiple comments once re-lexed,
+since each physical line starts its own `//`) that's fixed as of that PR's final commit.
 
 **PR #5 (this one) finishes** §12 Phase 5's scope: `core/reshape.ts` implements the two-threshold
 hysteresis (`singleLineMaxWidth` / `forceMultilineMinWidth`) that decides whether a block comment
