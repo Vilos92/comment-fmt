@@ -16,21 +16,29 @@ change to reflect progress -- this section is the only part that does.
 | Phase                    | State       | Where                                                  |
 | ------------------------ | ----------- | ------------------------------------------------------ |
 | 1 -- Scaffold            | done        | [PR #1](https://github.com/Vilos92/comment-fmt/pull/1) |
-| 2 -- Core + JS lexer     | in this PR  | [PR #2](https://github.com/Vilos92/comment-fmt/pull/2) |
-| 3 -- CLI                 | not started |                                                        |
+| 2 -- Core + JS lexer     | done        | [PR #2](https://github.com/Vilos92/comment-fmt/pull/2) |
+| 3 -- CLI                 | in this PR  | [PR #3](https://github.com/Vilos92/comment-fmt/pull/3) |
 | 4 -- Differential corpus | not started |                                                        |
 | 5 -- Block reshape       | not started |                                                        |
 | 6 -- CSS + HTML lexers   | not started |                                                        |
 | 7 -- Rollout and tuning  | not started |                                                        |
 | 8 -- Astro               | unscheduled | not committed to; see §4, §12                          |
 
-**PR #2 (this one) finishes** §12 Phase 2's scope: `core/{constants,measure,predicates,blocks,wrap}.ts`
-and `lang/js.ts`, plus `src/index.ts`'s `format()` wired to the real engine in place of the Phase 1
+**PR #2** finished §12 Phase 2's scope: `core/{constants,measure,predicates,blocks,wrap}.ts` and
+`lang/js.ts`, plus `src/index.ts`'s `format()` wired to the real engine in place of the Phase 1
 placeholder. All four §9.1 invariants are verified via fast-check, run manually through `bun` rather
-than `vp test` (see README's "Known issues" -- that's an upstream blocker, not a gap in this PR). 71
-fixture pairs live under `test/fixtures/js/`, covering the plan's verified lexer breakages, the full
-§8.1 directive list, JSDoc tag protection, and every bug found during an ultrareview pass and the
-follow-up design work on the orphan guard's tail-rebalance step.
+than `vp test` (see README's "Known issues" -- that's an upstream blocker, not a gap in that PR). 78
+fixture pairs live under `test/fixtures/js/` as of Phase 3, covering the plan's verified lexer
+breakages, the full §8.1 directive list, JSDoc tag protection, and every bug found during an
+ultrareview pass and the follow-up design work on the orphan guard's tail-rebalance step.
+
+**PR #3 (this one) finishes** §12 Phase 3's scope: `src/cli/index.ts` (`--check`/`--write`/`--diff`,
+file discovery per §10, the `comment-fmt.json` config surface) and this repo's own pre-commit hook
+wiring (§11, "consumer zero"). It also closes a gap left over from Phase 2: the `comment-fmt-ignore`
+escape hatch (§8.4) only had its self-protecting half implemented until this PR; `format()` now
+honors the file-level, preceding-line, and inline forms for real. Deliberately does **not** bump
+the version or publish to npm: that's deferred until closer to an actual public release, so
+`package.json` stays at `0.0.0` through this phase and the ones after it.
 
 **Once Phase 7 lands, delete this file** -- and before deleting it, sweep every `(plan §N)` citation out
 of the codebase's comments first. It's a handoff document for building the tool, not permanent project

@@ -1,0 +1,404 @@
+#!/usr/bin/env node
+import {execFileSync} from 'node:child_process';
+import {readdirSync, readFileSync, writeFileSync} from 'node:fs';
+import {extname, join, relative} from 'node:path';
+import {parseArgs} from 'node:util';
+
+import {DEFAULT_MAX_LENGTH, DEFAULT_TARGET_LENGTH} from '../core/constants.ts';
+import {format} from '../index.ts';
+
+/*
+ * Types.
+ */
+
+type Mode = 'check' | 'write' | 'diff';
+
+/** Parsed `comment-fmt.json`, every key defaulted (plan §6). */
+type Config = {
+  readonly maxLength: number;
+  readonly targetLength: number;
+  readonly ignore: readonly string[];
+  readonly extraDirectives: readonly string[];
+};
+
+type FileResult = {
+  readonly path: string;
+  readonly original: string;
+  readonly formatted: string;
+  readonly changed: boolean;
+};
+
+type DiffOpKind = 'context' | 'add' | 'remove';
+
+type DiffOp = {readonly kind: DiffOpKind; readonly line: string};
+
+/*
+ * Constants.
+ */
+
+const CONFIG_FILE_NAME = 'comment-fmt.json';
+
+/**
+ * Extensions `format()` actually knows how to reflow. Only `lang/js.ts` exists so far (CSS and
+ * HTML lexers are a later phase), so anything discovered outside this set is silently left alone
+ * rather than reported as checked, written, or diffed.
+ */
+const FORMATTABLE_EXTENSIONS: ReadonlySet<string> = new Set(['.js', '.jsx', '.ts', '.tsx']);
+
+/**
+ * Full future language scope (plan §4/§12 Phase 6), used only to decide what file discovery turns
+ * up. Kept wider than `FORMATTABLE_EXTENSIONS` so discovery doesn't need to change again once the
+ * CSS/HTML lexers land.
+ */
+const DISCOVERABLE_EXTENSIONS: ReadonlySet<string> = new Set([
+  '.js',
+  '.jsx',
+  '.ts',
+  '.tsx',
+  '.css',
+  '.scss',
+  '.html'
+]);
+
+const IGNORE_TIP =
+  'Tip: add // comment-fmt-ignore before a comment, or comment-fmt-ignore-file near the top ' +
+  'of a file, to exempt it.';
+
+const USAGE = 'Usage: comment-fmt (--check | --write | --diff) [files...]';
+
+const DIRECTORIES_TO_SKIP: ReadonlySet<string> = new Set(['node_modules', '.git']);
+
+const DIFF_PREFIXES: Record<DiffOpKind, string> = {context: ' ', add: '+', remove: '-'};
+
+const PARSE_OPTIONS = {
+  check: {type: 'boolean', default: false},
+  write: {type: 'boolean', default: false},
+  diff: {type: 'boolean', default: false}
+} as const;
+
+/*
+ * Entry.
+ */
+
+/**
+ * Runs the CLI end to end and returns an exit code rather than calling `process.exit()` itself,
+ * so the argument-parsing and formatting logic stays testable without spawning a real process.
+ */
+export function runCli(argv: string[], cwd: string): number {
+  let parsed: {values: {check: boolean; write: boolean; diff: boolean}; positionals: string[]};
+  try {
+    parsed = parseArgs({args: argv, allowPositionals: true, options: PARSE_OPTIONS});
+  } catch (error) {
+    process.stderr.write(`${(error as Error).message}\n${USAGE}\n`);
+    return 2;
+  }
+
+  const {check, write, diff} = parsed.values;
+  const modeCount = Number(check) + Number(write) + Number(diff);
+  if (modeCount !== 1) {
+    process.stderr.write(`${USAGE}\nExactly one of --check, --write, or --diff must be given.\n`);
+    return 2;
+  }
+  const mode: Mode = computeMode({check, write, diff});
+
+  let config: Config;
+  try {
+    config = loadConfig(cwd);
+  } catch (error) {
+    process.stderr.write(`${(error as Error).message}\n`);
+    return 2;
+  }
+
+  const files = discoverFiles(parsed.positionals, cwd, config.ignore);
+  const formattableFiles = files.filter(path => FORMATTABLE_EXTENSIONS.has(extname(path)));
+
+  let results: FileResult[];
+  try {
+    results = formattableFiles.map(path => formatFile(path, config));
+  } catch (error) {
+    process.stderr.write(`${(error as Error).message}\n`);
+    return 2;
+  }
+
+  const changed = results.filter(result => result.changed);
+
+  if (mode === 'write') {
+    for (const result of changed) {
+      writeFileSync(result.path, result.formatted);
+    }
+    for (const result of changed) {
+      process.stdout.write(`Formatted ${relative(cwd, result.path)}\n`);
+    }
+    return 0;
+  }
+
+  if (changed.length === 0) {
+    return 0;
+  }
+
+  if (mode === 'diff') {
+    for (const result of changed) {
+      process.stdout.write(`${renderDiff(relative(cwd, result.path), result.original, result.formatted)}\n`);
+    }
+  } else {
+    for (const result of changed) {
+      process.stdout.write(`${relative(cwd, result.path)}\n`);
+    }
+  }
+  process.stdout.write(`\n${IGNORE_TIP}\n`);
+  return 1;
+}
+
+// Only reached when run as a real process (see `test/cli.test.ts` for direct `runCli` testing);
+// guarded so importing this module never has a side effect of its own.
+if (import.meta.url === `file://${process.argv[1]}`) {
+  const exitCode = runCli(process.argv.slice(2), process.cwd());
+  process.exit(exitCode);
+}
+
+/*
+ * Helpers.
+ */
+
+function computeMode(flags: {
+  readonly check: boolean;
+  readonly write: boolean;
+  readonly diff: boolean;
+}): Mode {
+  if (flags.check) {
+    return 'check';
+  }
+  if (flags.write) {
+    return 'write';
+  }
+  return 'diff';
+}
+
+function formatFile(path: string, config: Config): FileResult {
+  let original: string;
+  try {
+    original = readFileSync(path, 'utf8');
+  } catch (error) {
+    throw new Error(`Could not read ${path}: ${(error as Error).message}`);
+  }
+
+  const formatted = format(original, {
+    maxLength: config.maxLength,
+    targetLength: config.targetLength,
+    extraDirectives: config.extraDirectives
+  });
+
+  return {path, original, formatted, changed: formatted !== original};
+}
+
+/**
+ * Loads `comment-fmt.json` from `cwd` if present, defaulting every key (plan §6). Fails fast on
+ * malformed JSON or a wrong-typed known key rather than silently ignoring a broken config, per
+ * this repo's fail-fast convention.
+ */
+function loadConfig(cwd: string): Config {
+  const defaults: Config = {
+    maxLength: DEFAULT_MAX_LENGTH,
+    targetLength: DEFAULT_TARGET_LENGTH,
+    ignore: [],
+    extraDirectives: []
+  };
+
+  const configPath = join(cwd, CONFIG_FILE_NAME);
+  let raw: string;
+  try {
+    raw = readFileSync(configPath, 'utf8');
+  } catch {
+    // No config file. Defaults stand; this is the common case (plan §6: "most repos need no file").
+    return defaults;
+  }
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch (error) {
+    throw new Error(`${CONFIG_FILE_NAME} is not valid JSON: ${(error as Error).message}`);
+  }
+
+  if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+    throw new Error(`${CONFIG_FILE_NAME} must contain a JSON object.`);
+  }
+
+  const candidate = parsed as Record<string, unknown>;
+  return {
+    maxLength: readNumberKey(candidate, 'maxLength', defaults.maxLength),
+    targetLength: readNumberKey(candidate, 'targetLength', defaults.targetLength),
+    ignore: readStringArrayKey(candidate, 'ignore', defaults.ignore),
+    extraDirectives: readStringArrayKey(candidate, 'extraDirectives', defaults.extraDirectives)
+  };
+}
+
+/**
+ * Both `maxLength` and `targetLength` are column budgets, so a non-finite or non-positive value
+ * (`0`, a negative number, `NaN`) isn't just an unusual choice, it's a broken config that would
+ * otherwise degrade `wrap()` to one word per line instead of failing here with a clear cause.
+ */
+function readNumberKey(source: Record<string, unknown>, key: string, fallback: number): number {
+  if (!(key in source)) {
+    return fallback;
+  }
+  const value = source[key];
+  if (typeof value !== 'number') {
+    throw new Error(`${CONFIG_FILE_NAME}: "${key}" must be a number, got ${typeof value}.`);
+  }
+  if (!Number.isFinite(value) || value <= 0) {
+    throw new Error(`${CONFIG_FILE_NAME}: "${key}" must be a positive, finite number, got ${value}.`);
+  }
+  return value;
+}
+
+function readStringArrayKey(
+  source: Record<string, unknown>,
+  key: string,
+  fallback: readonly string[]
+): readonly string[] {
+  if (!(key in source)) {
+    return fallback;
+  }
+  const value = source[key];
+  if (!Array.isArray(value) || value.some(entry => typeof entry !== 'string')) {
+    throw new Error(`${CONFIG_FILE_NAME}: "${key}" must be an array of strings.`);
+  }
+  return value as string[];
+}
+
+/**
+ * Resolves the file list per plan §10: explicit argv wins outright (the hook path, where
+ * `lint-staged` already did the filtering), otherwise a git repo is discovered via
+ * `git ls-files` (gitignore-respecting for free), otherwise a plain recursive `node:fs` walk. Only
+ * the discovery paths apply `ignore` patterns; explicit argv is used as given.
+ */
+function discoverFiles(positionals: readonly string[], cwd: string, ignore: readonly string[]): string[] {
+  if (positionals.length > 0) {
+    return positionals.map(path => (path.startsWith('/') ? path : join(cwd, path)));
+  }
+
+  const discovered = checkHasGitRepo(cwd) ? listGitFiles(cwd) : walkDirectory(cwd);
+  const matchers = ignore.map(globToRegExp);
+  return discovered.filter(path => !matchers.some(matcher => matcher.test(relative(cwd, path))));
+}
+
+function checkHasGitRepo(cwd: string): boolean {
+  try {
+    execFileSync('git', ['rev-parse', '--is-inside-work-tree'], {cwd, stdio: ['ignore', 'pipe', 'ignore']});
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function listGitFiles(cwd: string): string[] {
+  const output = execFileSync('git', ['ls-files'], {cwd, encoding: 'utf8'});
+  return output
+    .split('\n')
+    .filter(line => line.length > 0)
+    .map(line => join(cwd, line))
+    .filter(path => DISCOVERABLE_EXTENSIONS.has(extname(path)));
+}
+
+function walkDirectory(root: string): string[] {
+  const results: string[] = [];
+  const entries = readdirSync(root, {withFileTypes: true});
+
+  for (const entry of entries) {
+    const path = join(root, entry.name);
+    if (entry.isDirectory()) {
+      if (!DIRECTORIES_TO_SKIP.has(entry.name)) {
+        results.push(...walkDirectory(path));
+      }
+      continue;
+    }
+    if (entry.isFile() && DISCOVERABLE_EXTENSIONS.has(extname(path))) {
+      results.push(path);
+    }
+  }
+
+  return results;
+}
+
+/**
+ * Converts the common glob subset used by `ignore` patterns (plan §6) to a `RegExp`: `*` matches
+ * within one path segment, `**` matches across segments, and every other character is escaped
+ * and matched literally. Deliberately not a full glob implementation, just enough for exclude
+ * patterns without taking a library dependency (plan §10: zero runtime dependencies).
+ */
+function globToRegExp(pattern: string): RegExp {
+  let source = '';
+  for (let i = 0; i < pattern.length; i += 1) {
+    const char = pattern[i];
+    if (char === '*' && pattern[i + 1] === '*') {
+      source += '.*';
+      i += 1;
+    } else if (char === '*') {
+      source += '[^/]*';
+    } else if (char === '?') {
+      source += '[^/]';
+    } else {
+      source += char?.replace(/[.+^${}()|[\]\\]/g, '\\$&');
+    }
+  }
+  return new RegExp(`^${source}$`);
+}
+
+/**
+ * Minimal unified-diff renderer for `--diff` output: no external diff library, just a line-level
+ * LCS-based hunk between `before` and `after`. Good enough to make `--diff` reviewable (plan
+ * §9.5), not a general-purpose diff tool.
+ */
+function renderDiff(path: string, before: string, after: string): string {
+  const beforeLines = before.split('\n');
+  const afterLines = after.split('\n');
+  const ops = computeLineDiff(beforeLines, afterLines);
+
+  const header = [`--- ${path}`, `+++ ${path}`];
+  const body = ops.map(op => `${DIFF_PREFIXES[op.kind]}${op.line}`);
+  return [...header, ...body].join('\n');
+}
+
+/** Classic O(n*m) LCS table, sized for a single reflowed file rather than arbitrary large inputs. */
+function computeLineDiff(before: readonly string[], after: readonly string[]): DiffOp[] {
+  const n = before.length;
+  const m = after.length;
+  const lcs: number[][] = Array.from({length: n + 1}, () => new Array(m + 1).fill(0));
+
+  for (let i = n - 1; i >= 0; i -= 1) {
+    for (let j = m - 1; j >= 0; j -= 1) {
+      const row = lcs[i] as number[];
+      row[j] =
+        before[i] === after[j]
+          ? ((lcs[i + 1] as number[])[j + 1] as number) + 1
+          : Math.max((lcs[i + 1] as number[])[j] as number, (lcs[i] as number[])[j + 1] as number);
+    }
+  }
+
+  const ops: DiffOp[] = [];
+  let i = 0;
+  let j = 0;
+  while (i < n && j < m) {
+    if (before[i] === after[j]) {
+      ops.push({kind: 'context', line: before[i] as string});
+      i += 1;
+      j += 1;
+    } else if (((lcs[i + 1] as number[])[j] as number) >= ((lcs[i] as number[])[j + 1] as number)) {
+      ops.push({kind: 'remove', line: before[i] as string});
+      i += 1;
+    } else {
+      ops.push({kind: 'add', line: after[j] as string});
+      j += 1;
+    }
+  }
+  while (i < n) {
+    ops.push({kind: 'remove', line: before[i] as string});
+    i += 1;
+  }
+  while (j < m) {
+    ops.push({kind: 'add', line: after[j] as string});
+    j += 1;
+  }
+  return ops;
+}
