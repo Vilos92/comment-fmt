@@ -133,6 +133,12 @@ describe('cli', () => {
       const rewritten = readFileSync(filePath, 'utf8');
       expect(rewritten).not.toBe(original);
       expect(rewritten.split('\n').every(line => line.length <= 110)).toBe(true);
+      // Width and non-equality alone would still pass if reflow corrupted or dropped content
+      // around the comment. Assert the actual words and the surrounding markup both survived.
+      expect(rewritten).toContain('<body></body>');
+      for (const word of ['intentionally', 'overflows', 'testing']) {
+        expect(rewritten).toContain(word);
+      }
     });
 
     test('reflows an overflowing .css comment in place (plan §12 Phase 6)', () => {

@@ -151,10 +151,13 @@ in blast-radius order, so running its POC with no `astro.ts` lexer would've surf
 
 `lang/html.ts` locates `<!-- -->` comments, skips quoted attribute values (so
 `<a href="<!-- oops">Link</a>` doesn't corrupt everything up to the next real `-->`), never reports one
-inside `<textarea>`/`<title>` (raw text per the HTML5 spec, never real comment nodes) or `<pre>` (a real
-comment, but never reflowed -- its whitespace is rendering-significant), and delegates `<script>`/`<style>`
-bodies to `js.ts`/`css.ts` with offsets remapped back onto the real document, mirroring the `<script>`/
-`<style>` note in §4. Both WHATWG-defined degenerate short forms (`<!-->`, `<!--->`) are handled explicitly
+inside `<textarea>`/`<title>` (RCDATA elements per the WHATWG spec -- distinct from `<script>`/`<style>`'s
+own raw-text category, but the same practical consequence: never real comment nodes) or `<pre>` (a real
+comment, but never reflowed -- not because its whitespace is rendering-significant, a comment is never
+rendered at all, but to preserve `<pre>`'s own strong "keep this exactly as authored" signal, the same
+conservative bias this project already applies elsewhere), and delegates `<script>`/`<style>` bodies to
+`js.ts`/`css.ts` with offsets remapped back onto the real document, mirroring the `<script>`/`<style>` note
+in §4. Both WHATWG-defined degenerate short forms (`<!-->`, `<!--->`) are handled explicitly
 -- getting either wrong would search onward for the _next_ real `-->` and swallow everything up to it as
 one comment, a genuine corruption bug caught by construction, not by testing after the fact. `src/index.ts`
 gained a per-language `FreshBlockStyle` (JS/CSS keep the JSDoc `* ` convention when a comment expands from

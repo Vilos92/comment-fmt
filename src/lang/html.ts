@@ -18,13 +18,19 @@ type TagInfo = {
 
 /**
  * How each element's content is treated once its opening tag is seen. `'skip'` elements
- * (`<pre>`, `<textarea>`, `<title>`) are never scanned for comments at all, for two different
- * reasons that land on the same handling: `<textarea>`/`<title>` are raw-text elements per the
- * HTML5 spec, so a `<!-- -->`-looking substring inside one is literal data, never a real comment
- * node. `<pre>` content *is* real, parsed markup — a comment inside it is a genuine comment — but
- * its whitespace is rendering-significant, so reflowing one would change what the page displays.
- * `'delegate-js'`/`'delegate-css'` elements (`<script>`, `<style>`) hand their body to the JS/CSS
- * lexer to find real `//`/`/* *​/` comments within, per plan §4.
+ * (`<pre>`, `<textarea>`, `<title>`, `<noscript>`) are never scanned for comments at all, for two
+ * different reasons that land on the same handling. `<textarea>`/`<title>` are RCDATA elements and
+ * `<noscript>` (when scripting is enabled, the ordinary browser case) is a raw-text element per the
+ * WHATWG spec -- two distinct categories, but the same practical consequence: a `<!-- -->`-looking
+ * substring inside any of them is literal data, never a real comment node. (`<script>`/`<style>`
+ * are also raw-text, but their content is genuinely JS/CSS worth reflowing, so they're
+ * `'delegate-*'` instead of `'skip'`.) `<pre>` content *is* real, parsed markup -- a comment inside
+ * it is a genuine comment, and it's never rendered regardless of what element contains it, so
+ * touching one has no rendering effect either way -- but `<pre>` is HTML's strongest signal that an
+ * author wants this content preserved exactly as authored, and that's worth respecting for
+ * everything inside it, comments included, matching this project's own conservative "if uncertain,
+ * don't touch it" bias. `'delegate-js'`/`'delegate-css'` elements (`<script>`, `<style>`) hand their
+ * body to the JS/CSS lexer to find real `//`/`/* *​/` comments within, per plan §4.
  */
 type OpaqueKind = 'skip' | 'delegate-js' | 'delegate-css';
 
@@ -43,7 +49,11 @@ const OPAQUE_ELEMENTS: ReadonlyMap<string, OpaqueKind> = new Map([
   ['style', 'delegate-css'],
   ['pre', 'skip'],
   ['textarea', 'skip'],
-  ['title', 'skip']
+  ['title', 'skip'],
+  // Raw-text per WHATWG when scripting is enabled (the ordinary browser case) -- a very common
+  // real-world pattern for analytics/GTM `<noscript>` fallback snippets, whose content can easily
+  // contain `<!--`-looking substrings that must stay untouched, not get scanned as real comments.
+  ['noscript', 'skip']
 ]);
 
 /*
@@ -53,10 +63,10 @@ const OPAQUE_ELEMENTS: ReadonlyMap<string, OpaqueKind> = new Map([
 /**
  * Locates every `<!-- ... -->` comment in HTML source, skipping quoted attribute values (so
  * `<a href="<!-- not a comment -->">` isn't mistaken for one), never reporting a comment inside a
- * raw-text element (`<textarea>`, `<title>`, and `<script>`/`<style>`'s own delimiter-recognition
- * once their body is delegated) or inside `<pre>` (real comments, but never touched -- see
- * `OpaqueKind`), and delegating `<script>`/`<style>` bodies to `js.ts`/`css.ts` with their offsets
- * remapped from the extracted substring back onto this document (plan §4).
+ * `'skip'` element (`<textarea>`, `<title>`, `<noscript>`, and `<script>`/`<style>`'s own
+ * delimiter-recognition once their body is delegated) or inside `<pre>` (real comments, but never
+ * touched -- see `OpaqueKind`), and delegating `<script>`/`<style>` bodies to `js.ts`/`css.ts` with
+ * their offsets remapped from the extracted substring back onto this document (plan §4).
  *
  * `start`/`end` bound the scan to a region of `source` without changing what `source` itself
  * means: every offset computation (`indent`, `ownLine`, and any nested `<script>`/`<style>`
