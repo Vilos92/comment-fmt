@@ -13,16 +13,16 @@ strategy with case generation as an explicit, budgeted task (§9).
 Kept up to date as phases land. The rest of this document is the frozen v3 plan itself and doesn't
 change to reflect progress -- this section is the only part that does.
 
-| Phase                    | State                             | Where                                                  |
-| ------------------------ | --------------------------------- | ------------------------------------------------------ |
-| 1 -- Scaffold            | done                              | [PR #1](https://github.com/Vilos92/comment-fmt/pull/1) |
-| 2 -- Core + JS lexer     | done                              | [PR #2](https://github.com/Vilos92/comment-fmt/pull/2) |
-| 3 -- CLI                 | done                              | [PR #3](https://github.com/Vilos92/comment-fmt/pull/3) |
-| 4 -- Differential corpus | done                              | [PR #4](https://github.com/Vilos92/comment-fmt/pull/4) |
-| 5 -- Block reshape       | done                              | [PR #5](https://github.com/Vilos92/comment-fmt/pull/5) |
-| 6 -- CSS + HTML lexers   | CSS in this PR, HTML not started  | [PR #6](https://github.com/Vilos92/comment-fmt/pull/6) |
-| 7 -- Rollout and tuning  | proof-of-concept pass in progress | see PLAN.md §11 status note below                      |
-| 8 -- Astro               | unscheduled                       | not committed to; see §4, §12                          |
+| Phase                    | State                                                                                 | Where                                                  |
+| ------------------------ | ------------------------------------------------------------------------------------- | ------------------------------------------------------ |
+| 1 -- Scaffold            | done                                                                                  | [PR #1](https://github.com/Vilos92/comment-fmt/pull/1) |
+| 2 -- Core + JS lexer     | done                                                                                  | [PR #2](https://github.com/Vilos92/comment-fmt/pull/2) |
+| 3 -- CLI                 | done                                                                                  | [PR #3](https://github.com/Vilos92/comment-fmt/pull/3) |
+| 4 -- Differential corpus | done                                                                                  | [PR #4](https://github.com/Vilos92/comment-fmt/pull/4) |
+| 5 -- Block reshape       | done                                                                                  | [PR #5](https://github.com/Vilos92/comment-fmt/pull/5) |
+| 6 -- CSS + HTML lexers   | CSS in this PR, HTML not started                                                      | [PR #6](https://github.com/Vilos92/comment-fmt/pull/6) |
+| 7 -- Rollout and tuning  | proof-of-concept pass in progress -- `vilos92.com` first, then Phase 8, then the rest | see status notes below                                 |
+| 8 -- Astro               | moved up, scheduled before `greglinscheg.com`'s rollout pass (was unscheduled)        | see status notes below                                 |
 
 **PR #2** finished §12 Phase 2's scope: `core/{constants,measure,predicates,blocks,wrap}.ts` and
 `lang/js.ts`, plus `src/index.ts`'s `format()` wired to the real engine in place of the Phase 1
@@ -142,6 +142,21 @@ merged, and the actual sequencing becomes: clean up and publish `comment-fmt` as
 (§11's own "once operational" README step below, plus `AGENTS.md`'s "delete this file, sweep `plan §N`
 citations" instruction), _then_ wire the real hook into each repo as a proper dependency, per §11's
 original hook-wiring guidance.
+
+**Phase 8 (Astro) is moving up ahead of `greglinscheg.com`'s rollout pass, superseding §12's original
+phasing below.** §12 held Astro entirely unscheduled, deferred until after Phase 7 had run so
+`greglinscheg.com`'s own rollout could surface whether `.astro` comments were common enough there to be
+worth it. That reasoning doesn't hold once §11's rollout order is taken literally: `greglinscheg.com` is
+the second repo in blast-radius order, and it's Astro-based. Running its POC pass with no `astro.ts` lexer
+wouldn't surface "not common enough to bother with" -- it would surface nothing at all, since `.astro`
+isn't in `LANG_BY_EXTENSION` anywhere and the file is never even discovered, let alone reflowed. That's a
+POC proving the tool against an incomplete slice of the one repo picked specifically to exercise the
+gap. So the revised order is: `vilos92.com`'s POC pass first (not Astro-based, no dependency on any of this),
+then finish Phase 6's still-outstanding HTML half (the `<script>`/`<style>` delegation design this file
+already flags as needing direct user input, not a unilateral call), then build `lang/astro.ts` per §4's
+architecture note on top of it (frontmatter delegates to `js.ts`, template delegates to `html.ts`, both
+with position-offsetting) -- `astro.ts` can't exist before `html.ts` does, since it delegates directly to
+it -- _then_ continue the rollout with `greglinscheg.com` onward.
 
 **Once Phase 7 lands, delete this file** -- and before deleting it, sweep every `(plan §N)` citation out
 of the codebase's comments first. It's a handoff document for building the tool, not permanent project
