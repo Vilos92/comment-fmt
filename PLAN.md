@@ -184,6 +184,23 @@ adversarial case list plus the delegation/frontmatter/known-gap cases above. The
 found zero code-invariance violations, and a separate read-only pass directly against `greglinscheid.com`
 (16,346 files including its real `.astro` content) found zero as well.
 
+**A real, general bug surfaced during Phase 7's `scriptlancer` self-review, fixed here too:**
+`core/wrap.ts`'s `fillBlock` pooled a block's lines with `lines.join(' ').trim()` before greedy-filling,
+which silently discarded a list item's own leading indentation (its marker's whitespace, e.g. the `  ` in
+`*   1. text`) and had no concept of a hanging indent for a wrapped item's continuation lines. A two-item
+list where only item 1 overflowed came out with item 1's indent stripped while item 2 (untouched) kept
+its original indent -- a visibly misaligned list caused by a single line's overflow, not a hypothetical:
+confirmed live against `packages/shared/src/pilot/corridorAvoidance.ts` in `scriptlancer` during that
+repo's own POC self-review. Fixed with `fillListItemBlock`: the marker (leading whitespace + bullet/
+number + trailing spaces, exactly as authored) is spliced off before pooling words, wrapped at a budget
+narrowed by the marker's own width, then re-attached -- verbatim on line 1, as a same-width hanging
+indent on every continuation line. This lives in `core/`, so it's language-agnostic and applies to every
+lexer (JS/CSS/HTML/Astro) uniformly, not just JS. Two regression fixtures added
+(`regression-numbered-list-item-preserves-indent-and-hangs`,
+`regression-bulleted-list-item-hangs-under-marker`); the full corpus scan re-run afterward still found
+zero code-invariance violations and the same 5,027-file changed count as before the fix (expected -- this
+changes _how_ overflowing list items wrap, not _which_ files have anything to wrap).
+
 **Once Phase 7 lands, delete this file** -- and before deleting it, sweep every `(plan §N)` citation out
 of the codebase's comments first. It's a handoff document for building the tool, not permanent project
 documentation, and every comment that cites it (13+ across `src/`, `test/`, and `AGENTS.md` as of this

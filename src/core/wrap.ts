@@ -1,4 +1,4 @@
-import {splitIntoBlocks} from './blocks.ts';
+import {LIST_MARKER, splitIntoBlocks} from './blocks.ts';
 import {
   DEFAULT_MAX_LENGTH,
   DEFAULT_ORPHAN_MIN_RATIO,
@@ -71,6 +71,15 @@ function fillBlock(
   targetBudget: number,
   orphanMinRatio: number
 ): string[] {
+  const marker = LIST_MARKER.exec(lines[0] ?? '')?.[0];
+  // A marker so wide there's no room left to wrap into falls through to the plain path below: the
+  // marker (and whatever original indentation it carries) still ends up on line 1 either way, so
+  // this only changes whether continuation lines get a hanging indent, never whether the marker
+  // itself survives.
+  if (marker !== undefined && maxBudget - marker.length > 0) {
+    return fillListItemBlock(lines, marker, maxBudget, targetBudget, orphanMinRatio);
+  }
+
   const words = lines
     .join(' ')
     .trim()
@@ -80,6 +89,50 @@ function fillBlock(
     return [...lines];
   }
   return applyOrphanGuard(greedyFill(words, targetBudget, maxBudget), maxBudget, orphanMinRatio);
+}
+
+/**
+ * Wraps a list-item block (one whose first line starts with a `-`/`*`/`+`/`1.`-style marker,
+ * per `blocks.ts`'s own boundary rule) so overflow doesn't strip the marker's own indentation or
+ * leave its continuation lines flush with the block's base prefix. Confirmed as a real bug, not
+ * theoretical: `fillBlock`'s original `lines.join(' ').trim()` discarded a marker's leading
+ * whitespace outright, and greedy-fill had no notion of a marker at all, so a two-item list where
+ * only item 1 overflowed came out with item 1's indent stripped while item 2 (untouched) kept its
+ * original indent -- a visibly misaligned list from a single line's overflow.
+ *
+ * `marker` (already known to be `lines[0]`'s own leading whitespace + bullet/number + trailing
+ * spaces, exactly as the author wrote it) is spliced off before pooling words, wrapped at a budget
+ * narrowed by the marker's own width, then re-attached: verbatim on line 1, as a same-width
+ * hanging indent on every continuation line, so wrapped text lines up under the first word after
+ * the marker -- the same convention markdown/JSDoc tooling already uses for wrapped list items.
+ */
+function fillListItemBlock(
+  lines: readonly string[],
+  marker: string,
+  maxBudget: number,
+  targetBudget: number,
+  orphanMinRatio: number
+): string[] {
+  const restLines = [(lines[0] as string).slice(marker.length), ...lines.slice(1)];
+  const words = restLines
+    .join(' ')
+    .trim()
+    .split(/\s+/)
+    .filter(word => word.length > 0);
+  if (words.length === 0) {
+    return [...lines];
+  }
+
+  const narrowedMax = maxBudget - marker.length;
+  const narrowedTarget = targetBudget - marker.length;
+  const hangingIndent = ' '.repeat(marker.length);
+  const wrapped = applyOrphanGuard(
+    greedyFill(words, narrowedTarget, narrowedMax),
+    narrowedMax,
+    orphanMinRatio
+  );
+
+  return wrapped.map((line, idx) => (idx === 0 ? `${marker}${line}` : `${hangingIndent}${line}`));
 }
 
 /**
