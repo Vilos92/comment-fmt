@@ -8,7 +8,9 @@ import {DEFAULT_MAX_LENGTH, DEFAULT_TARGET_LENGTH} from '../core/constants.ts';
 import {measure} from '../core/measure.ts';
 import {ASCII_BOX_OR_TREE, BOX_DRAWING_CHARS, HAS_PIPE} from '../core/predicates.ts';
 import {format, type Lang} from '../index.ts';
+import {findComments as findCommentsAstro} from '../lang/astro.ts';
 import {findComments as findCommentsCss} from '../lang/css.ts';
+import {findComments as findCommentsHtml} from '../lang/html.ts';
 import {findComments as findCommentsJs} from '../lang/js.ts';
 
 /*
@@ -63,11 +65,20 @@ type DiffOp = {readonly kind: DiffOpKind; readonly line: string};
 const CONFIG_FILE_NAME = 'comment-fmt.json';
 
 /**
- * Extensions `format()` actually knows how to reflow. HTML has no lexer yet (plan §12 Phase 6's
- * other half), so anything discovered outside this set is silently left alone rather than
- * reported as checked, written, or diffed.
+ * Extensions `format()` actually knows how to reflow. Anything discovered outside this set is
+ * silently left alone rather than reported as checked, written, or diffed (currently nothing --
+ * every extension `DISCOVERABLE_EXTENSIONS` names now has a real lexer, per plan §12 Phase 6).
  */
-const FORMATTABLE_EXTENSIONS: ReadonlySet<string> = new Set(['.js', '.jsx', '.ts', '.tsx', '.css', '.scss']);
+const FORMATTABLE_EXTENSIONS: ReadonlySet<string> = new Set([
+  '.js',
+  '.jsx',
+  '.ts',
+  '.tsx',
+  '.css',
+  '.scss',
+  '.html',
+  '.astro'
+]);
 
 /** Which `Lang` (plan §4) `format()` should use for a given formattable extension. */
 const LANG_BY_EXTENSION: Readonly<Record<string, Lang>> = {
@@ -76,13 +87,24 @@ const LANG_BY_EXTENSION: Readonly<Record<string, Lang>> = {
   '.ts': 'js',
   '.tsx': 'js',
   '.css': 'css',
-  '.scss': 'css'
+  '.scss': 'css',
+  '.html': 'html',
+  '.astro': 'astro'
+};
+
+/** `--report-overwidth`'s own comment-finding pass, per `Lang` (plan §9.3). */
+const FIND_COMMENTS_BY_LANG: Readonly<Record<Lang, (source: string) => ReturnType<typeof findCommentsJs>>> = {
+  js: findCommentsJs,
+  css: findCommentsCss,
+  html: findCommentsHtml,
+  astro: findCommentsAstro
 };
 
 /**
  * Full future language scope (plan §4/§12 Phase 6), used only to decide what file discovery turns
- * up. Kept wider than `FORMATTABLE_EXTENSIONS` so discovery doesn't need to change again once the
- * CSS/HTML lexers land.
+ * up. Kept wider than `FORMATTABLE_EXTENSIONS` so discovery doesn't need to change again the next
+ * time a lexer is mid-flight (every extension named here currently has one, so the two sets are
+ * identical today -- that's expected, not a sign either one is redundant).
  */
 const DISCOVERABLE_EXTENSIONS: ReadonlySet<string> = new Set([
   '.js',
@@ -91,7 +113,8 @@ const DISCOVERABLE_EXTENSIONS: ReadonlySet<string> = new Set([
   '.tsx',
   '.css',
   '.scss',
-  '.html'
+  '.html',
+  '.astro'
 ]);
 
 const IGNORE_TIP =
@@ -458,9 +481,9 @@ function printOverwidthReport(results: readonly FileResult[], config: Config): v
  * failure mode positional matching had of throwing, or silently mismatching, on ordinary input.
  */
 function collectOverwidthFindings(result: FileResult, maxLength: number): OverwidthFinding[] {
-  const findCommentsForPath =
-    LANG_BY_EXTENSION[extname(result.path)] === 'css' ? findCommentsCss : findCommentsJs;
-  const originalComments = findCommentsForPath(result.original);
+  const originalComments = FIND_COMMENTS_BY_LANG[LANG_BY_EXTENSION[extname(result.path)] ?? 'js'](
+    result.original
+  );
 
   const findings: OverwidthFinding[] = [];
   for (const comment of originalComments) {

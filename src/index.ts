@@ -2,16 +2,17 @@ import {splitIntoBlocks} from './core/blocks.ts';
 import {DEFAULT_MAX_LENGTH} from './core/constants.ts';
 import {measure} from './core/measure.ts';
 import {wrap, type WrapOptions} from './core/wrap.ts';
+import {findComments as findCommentsAstro} from './lang/astro.ts';
 import {findComments as findCommentsCss} from './lang/css.ts';
+import {findComments as findCommentsHtml} from './lang/html.ts';
 import {findComments as findCommentsJs} from './lang/js.ts';
-import type {Comment} from './lang/types.ts';
+import type {Comment, Lang} from './lang/types.ts';
+
+export type {Lang} from './lang/types.ts';
 
 /*
  * Types.
  */
-
-/** Every language `format()` can reflow comments for (plan §4). */
-export type Lang = 'js' | 'css';
 
 export type FormatOptions = WrapOptions & {
   /**
@@ -22,16 +23,41 @@ export type FormatOptions = WrapOptions & {
   readonly lang?: Lang;
 };
 
+/**
+ * How a block comment being expanded from single-line to multi-line shape (no existing second
+ * line to detect a convention from) is laid out, per language. JS/CSS follow the JSDoc star-comment
+ * convention, aligning `* ` one column right of the comment's own `/`. HTML has no equivalent
+ * convention -- nobody writes starred HTML comments -- so its continuation lines get plain
+ * indentation and its closer sits flush with the opener rather than indented past it.
+ */
+type FreshBlockStyle = {
+  readonly prefix: string;
+  readonly continuationIndent: number;
+  readonly closeIndent: number;
+};
+
 /*
  * Constants.
  */
 
-/**
- * Default continuation-line prefix for a block comment being expanded from single-line to
- * multi-line shape, where there's no existing second line to detect a convention from. Aligns
- * the `*` one column right of the comment's own `/`, matching common JSDoc style.
- */
-const DEFAULT_BLOCK_PREFIX = '* ';
+const FIND_COMMENTS_BY_LANG: Readonly<Record<Lang, (source: string) => Comment[]>> = {
+  js: findCommentsJs,
+  css: findCommentsCss,
+  html: findCommentsHtml,
+  astro: findCommentsAstro
+};
+
+// Every comment `lang/astro.ts` returns already carries an explicit `lang` override ('js' for
+// frontmatter, 'html' for the template), so `FRESH_BLOCK_STYLE_BY_LANG.astro` is never actually
+// read in practice. Still given a real value, matching `html`'s, rather than duplicating one of
+// the other two arbitrarily: defense in depth if a future change to `astro.ts` ever left a comment
+// untagged, and `Record<Lang, ...>` requires every key regardless.
+const FRESH_BLOCK_STYLE_BY_LANG: Readonly<Record<Lang, FreshBlockStyle>> = {
+  js: {prefix: '* ', continuationIndent: 1, closeIndent: 1},
+  css: {prefix: '* ', continuationIndent: 1, closeIndent: 1},
+  html: {prefix: '', continuationIndent: 2, closeIndent: 0},
+  astro: {prefix: '', continuationIndent: 2, closeIndent: 0}
+};
 
 /**
  * File-level escape hatch (plan §8.4): honored only within a file's first `IGNORE_FILE_LINE_WINDOW`
@@ -73,8 +99,7 @@ const IGNORE_MARKER_WHOLE_COMMENT = /^comment-fmt-ignore(\s*(--|:)\s*\S.*)?$/;
  * same applies, unconditionally, to any comment covered by the plan §8.4 escape hatch below.
  */
 export function format(source: string, options: FormatOptions = {}): string {
-  const findCommentsForLang = options.lang === 'css' ? findCommentsCss : findCommentsJs;
-  const comments = findCommentsForLang(source);
+  const comments = FIND_COMMENTS_BY_LANG[options.lang ?? 'js'](source);
   if (checkHasFileIgnore(source, comments)) {
     return source;
   }
@@ -227,15 +252,15 @@ function reflowLineComment(comment: Comment, raw: string, options: FormatOptions
  * this function is only ever reached when something overflows (see the shared short-circuit in
  * `reflowComment`), so there is no "should this collapse" decision to make here at all, only "does
  * this need to expand or rewrap." A comment that was already single-line expands to the multi-line
- * starred form; one that was already multi-line stays multi-line and gets its content rewrapped in
- * place, never collapsed back down even if the rewrapped content would technically fit on one
- * line. The opening and closing lines never carry content, per plan §1: every content line,
- * including what would once have been "line 0" right after `open`, gets its own line with
- * `continuationPrefix` applied, exactly like every other content line. Handles both an already
- * multi-line comment (reusing its detected `linePrefix`) and one expanding from single-line for
- * the first time (synthesizing one via `DEFAULT_BLOCK_PREFIX`), and both a properly terminated
- * comment and an unterminated one (malformed/truncated source, which has no closing delimiter to
- * reconstruct).
+ * form (starred, for JS/CSS; plain-indented, for HTML -- see `FreshBlockStyle`); one that was
+ * already multi-line stays multi-line and gets its content rewrapped in place, never collapsed
+ * back down even if the rewrapped content would technically fit on one line. The opening and
+ * closing lines never carry content, per plan §1: every content line, including what would once
+ * have been "line 0" right after `open`, gets its own line with `continuationPrefix` applied,
+ * exactly like every other content line. Handles both an already multi-line comment (reusing its
+ * detected `linePrefix`) and one expanding from single-line for the first time (synthesizing one
+ * per `FRESH_BLOCK_STYLE_BY_LANG`), and both a properly terminated comment and an unterminated one
+ * (malformed/truncated source, which has no closing delimiter to reconstruct).
  */
 function reflowBlockComment(comment: Comment, raw: string, options: FormatOptions): string {
   const terminated = comment.close.length > 0;
@@ -253,14 +278,17 @@ function reflowBlockComment(comment: Comment, raw: string, options: FormatOption
   const wasSingleLine = physicalLines.length === 1;
 
   // A comment already spanning multiple physical lines carries its own detected `linePrefix`
-  // (full leading whitespace already included, per `computeLinePrefix` in lang/js.ts). One that's
-  // only overflowing now, and must expand from single-line, has no such line to detect a
-  // convention from. Synthesize one aligned under the comment's second character (`DEFAULT_BLOCK_PREFIX`).
-  const continuationPrefix = wasSingleLine
-    ? `${' '.repeat(comment.indent + 1)}${DEFAULT_BLOCK_PREFIX}`
-    : comment.linePrefix || `${' '.repeat(comment.indent + 1)}${DEFAULT_BLOCK_PREFIX}`;
+  // (full leading whitespace already included, per `computeLinePrefix` in lang/shared.ts; always
+  // empty for HTML, which has no per-line convention to detect). One that's only overflowing now,
+  // and must expand from single-line, has no such line to detect a convention from -- synthesize
+  // one per the language's `FreshBlockStyle` instead. `comment.lang` overrides `options.lang` for a
+  // comment delegated from a `<script>`/`<style>` body (plan §4): that comment is genuinely JS or
+  // CSS, not HTML, and should use its own language's style even inside an `html`-mode `format()` call.
+  const style = FRESH_BLOCK_STYLE_BY_LANG[comment.lang ?? options.lang ?? 'js'];
+  const freshPrefix = `${' '.repeat(comment.indent + style.continuationIndent)}${style.prefix}`;
+  const continuationPrefix = wasSingleLine ? freshPrefix : comment.linePrefix || freshPrefix;
   const closePrefix = wasSingleLine
-    ? ' '.repeat(comment.indent + 1)
+    ? ' '.repeat(comment.indent + style.closeIndent)
     : (/^\s*/.exec(physicalLines[physicalLines.length - 1] ?? '')?.[0] ?? '');
 
   const contentPhysicalLines = wasSingleLine || !terminated ? physicalLines : physicalLines.slice(0, -1);

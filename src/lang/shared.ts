@@ -79,12 +79,21 @@ function blockOpen(source: string, start: number, end: number, closed: boolean):
   return source.slice(start, i);
 }
 
-function computeIndent(source: string, start: number): number {
+/**
+ * How much leading whitespace precedes `start` on its own source line. Shared
+ * with `html.ts`, whose `<!-- -->` comments have no delimiter family in
+ * common with this file's other exports but derive `indent` the same way.
+ */
+export function computeIndent(source: string, start: number): number {
   const lineStart = source.lastIndexOf('\n', start - 1) + 1;
   return start - lineStart;
 }
 
-function computeOwnLine(source: string, start: number): boolean {
+/**
+ * `true` when nothing but whitespace precedes `start` on its source
+ * line. Shared with `html.ts` for the same reason as `computeIndent`.
+ */
+export function computeOwnLine(source: string, start: number): boolean {
   const lineStart = source.lastIndexOf('\n', start - 1) + 1;
   return /^\s*$/.test(source.slice(lineStart, start));
 }

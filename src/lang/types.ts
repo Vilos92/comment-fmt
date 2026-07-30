@@ -6,6 +6,13 @@
 export type CommentKind = 'line' | 'block';
 
 /**
+ * Every language `format()` can reflow comments for (plan §4). Defined here, not in `src/index.ts`,
+ * so `Comment` below can reference it without a circular import; re-exported from `src/index.ts`
+ * for every existing caller.
+ */
+export type Lang = 'js' | 'css' | 'html' | 'astro';
+
+/**
  * A comment located in source text. Lexers (`lang/*.ts`) produce these. `core/` consumes them and
  * never re-derives anything from raw source, so every field a reflow decision needs must live
  * here.
@@ -39,4 +46,12 @@ export type Comment = {
    * trailing a statement, e.g. `const x = 1; // trailing`).
    */
   readonly ownLine: boolean;
+  /**
+   * Overrides `format()`'s own `options.lang` for this one comment's block-comment style (plan
+   * §4). Unset for every comment a lexer finds directly in its own language. Set only by
+   * `lang/html.ts` on a comment delegated from a `<script>`/`<style>` body: that comment is
+   * genuinely JS or CSS, not HTML, so it should expand using JS/CSS's `* ` star convention, not
+   * HTML's plain-indent one, even though the surrounding document's `format()` call is `lang: 'html'`.
+   */
+  readonly lang?: Lang;
 };
