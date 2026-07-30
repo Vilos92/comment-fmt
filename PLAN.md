@@ -111,6 +111,15 @@ found zero code-invariance violations, both before and after a self-review pass 
 scanning logic duplicated between `js.ts` and `css.ts` into a shared `lang/shared.ts` module. 15
 fixture pairs live under `test/fixtures/css/`, covering plan §14.9's adversarial case list.
 
+A later review round found the `url(...)` adversarial case only covered the literal spelling: CSS
+also permits `url` written with identifier escapes (`u\72l(...)` is spec-legal, decoding to the same
+`url`), and `checkIsUnquotedUrlStart`'s plain 3-character match missed it entirely, letting a `//` in
+an escaped-spelling `url(...)`'s payload get misdetected as an SCSS comment (confirmed: a base64
+payload's bytes got a stray space spliced in on reflow). Fixed with a bounded backward scan that
+falls back to decoding CSS identifier escapes only when the literal match fails, so the common case
+stays a cheap slice comparison. The `accident-url-slash-slash-not-comment` fixture now covers both
+spellings.
+
 **HTML is deliberately not in this PR.** It's a materially different problem from CSS: it needs to
 delegate `<script>`/`<style>` region contents to the JS/CSS lexers with position-offsetting (not a
 simple call-through, since a nested lexer's offsets are relative to the substring it was given, not

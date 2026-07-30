@@ -1,6 +1,5 @@
 import type {Comment} from './types.ts';
 
-// comment-fmt-ignore
 /*
  * Entry.
  */
@@ -59,7 +58,6 @@ export function scanString(source: string, start: number, quote: string): number
   return n;
 }
 
-// comment-fmt-ignore
 /*
  * Helpers.
  */

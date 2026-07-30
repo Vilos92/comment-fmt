@@ -1,14 +1,19 @@
 import {buildComment, scanBlockComment, scanLineComment, scanString} from './shared.ts';
 import type {Comment} from './types.ts';
 
-// comment-fmt-ignore
 /*
  * Constants.
  */
 
 const IDENTIFIER_PART = /[\p{L}\p{N}_-]/u;
 
-// comment-fmt-ignore
+/**
+ * A CSS escape expands to at most one logical character: `\` plus up to 6 hex digits plus one
+ * optional trailing whitespace character. `url` is 3 logical characters, so no escaped spelling of
+ * it can span more raw source than 3 of these.
+ */
+const MAX_URL_IDENT_RAW_LENGTH = 8 * 3;
+
 /*
  * Entry.
  */
@@ -63,7 +68,6 @@ export function findComments(source: string): Comment[] {
   return comments;
 }
 
-// comment-fmt-ignore
 /*
  * Helpers.
  */
@@ -75,20 +79,82 @@ export function findComments(source: string): Comment[] {
  * hypothetical `my-url(...)`, isn't mistaken for the function. Only the unquoted form needs this
  * special case: `url("...")`/`url('...')` are already handled correctly by `scanString`, since
  * whatever precedes a quote is irrelevant to string-skipping.
+ *
+ * Also recognizes `url` spelled with CSS identifier escapes (e.g. `u\72l(`, a real, spec-legal
+ * spelling, not a hypothetical one). Skipping this would leave `//` inside an escaped-spelling
+ * `url(...)`'s payload misdetected as an SCSS line comment, corrupting the payload the moment
+ * reflow touches it (confirmed: a base64 data URL's bytes get a stray space spliced in).
  */
 function checkIsUnquotedUrlStart(source: string, i: number): boolean {
   if (source[i] !== '(') {
     return false;
   }
-  if (source.slice(i - 3, i).toLowerCase() !== 'url') {
+  const identStart = findUrlIdentStart(source, i);
+  if (identStart === undefined) {
     return false;
   }
-  const before = source[i - 4];
+  const before = source[identStart - 1];
   if (before !== undefined && IDENTIFIER_PART.test(before)) {
     return false;
   }
   const next = source[i + 1];
   return next !== '"' && next !== "'";
+}
+
+/**
+ * Finds the start of a `url` identifier ending exactly at `identEnd` (the position of its `(`), or
+ * `undefined` if none is there. Checks the plain literal spelling first, since that's every ordinary
+ * `url(...)` in practice, and only falls back to decoding CSS identifier escapes (rare, and
+ * expensive relative to a 3-character slice comparison) when that fails.
+ */
+function findUrlIdentStart(source: string, identEnd: number): number | undefined {
+  if (source.slice(identEnd - 3, identEnd).toLowerCase() === 'url') {
+    return identEnd - 3;
+  }
+  const windowStart = Math.max(0, identEnd - MAX_URL_IDENT_RAW_LENGTH);
+  for (let start = identEnd - 1; start >= windowStart; start -= 1) {
+    if (decodeCssIdentEscapes(source, start, identEnd)?.toLowerCase() === 'url') {
+      return start;
+    }
+  }
+  return undefined;
+}
+
+/**
+ * Decodes CSS identifier escapes in `source.slice(start, end)`: `\` plus 1-6 hex digits (plus one
+ * optional trailing whitespace character that terminates the escape without itself being decoded),
+ * or `\` plus any other single non-newline character taken literally. Returns `undefined` for a
+ * dangling `\` at `end` or one immediately followed by a newline, since neither is a valid escape.
+ * Only meant to recognize a handful of known short keywords (`url`) written this way, not to
+ * tokenize CSS identifiers in general.
+ */
+function decodeCssIdentEscapes(source: string, start: number, end: number): string | undefined {
+  let result = '';
+  let i = start;
+  while (i < end) {
+    const ch = source[i] as string;
+    if (ch !== '\\') {
+      result += ch;
+      i += 1;
+      continue;
+    }
+    i += 1;
+    if (i >= end || source[i] === '\n') {
+      return undefined;
+    }
+    const hexMatch = /^[0-9a-fA-F]{1,6}/.exec(source.slice(i, end));
+    if (!hexMatch) {
+      result += source[i];
+      i += 1;
+      continue;
+    }
+    result += String.fromCodePoint(Number.parseInt(hexMatch[0], 16));
+    i += hexMatch[0].length;
+    if (i < end && /[ \t\n\f]/.test(source[i] as string)) {
+      i += 1; // One trailing whitespace character terminates the hex escape, per spec.
+    }
+  }
+  return result;
 }
 
 /**

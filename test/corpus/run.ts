@@ -29,6 +29,7 @@ import type {Comment} from '../../src/lang/types.ts';
 type ScanTotals = {
   scanned: number;
   changed: number;
+  discoveredUnformattable: number;
 };
 
 type InvarianceViolation = {
@@ -102,7 +103,7 @@ function main(): void {
     }
   }
 
-  const totals: ScanTotals = {scanned: 0, changed: 0};
+  const totals: ScanTotals = {scanned: 0, changed: 0, discoveredUnformattable: 0};
   const invarianceViolations: InvarianceViolation[] = [];
   const errors: FileError[] = [];
   const skippedLargeFiles: SkippedLargeFile[] = [];
@@ -140,7 +141,11 @@ function scanOneFile(
 ): void {
   const lang = LANG_BY_EXTENSION[extname(path)];
   if (!lang) {
-    return; // Discovered but not formattable yet (e.g. `.html`, no lexer until later).
+    // Walked and yielded by `walkFiles` (e.g. `.html`, no lexer yet), but never `scanned`: that
+    // total means "ran through `format()`," and this file never does. Tallied separately so the
+    // report still surfaces it instead of the file just vanishing with no accounting at all.
+    totals.discoveredUnformattable += 1;
+    return;
   }
 
   totals.scanned += 1;
@@ -181,8 +186,9 @@ function nonCommentTokenStream(source: string, lang: Lang): string {
 
 /**
  * Recursively yields every discoverable file under `root` (any extension `LANG_BY_EXTENSION`
- * knows, plus `.html` so it's at least counted even before it has a lexer), skipping `.git` only
- * (not `node_modules`). A descendant directory that goes unreadable partway through (permissions,
+ * knows, plus `.html` so it's at least tallied in `discoveredUnformattable` even before it has a
+ * lexer, rather than the walk skipping it in silence), skipping `.git` only (not `node_modules`).
+ * A descendant directory that goes unreadable partway through (permissions,
  * a broken symlink, a race with something deleting it mid-scan) is recorded into `errors` and
  * skipped, not allowed to throw out of the generator: one bad directory deep in a 589,000-file
  * corpus shouldn't abort every root still left to scan, and `main()` already fails the run overall
@@ -255,11 +261,17 @@ function printReport(
 
   process.stdout.write('Corpus scan summary\n');
   process.stdout.write('--------------------\n');
-  process.stdout.write(`Files scanned:              ${totals.scanned}\n`);
-  process.stdout.write(`Files changed:               ${totals.changed}\n`);
-  process.stdout.write(`Code-invariance violations:  ${invarianceViolations.length}\n`);
-  process.stdout.write(`Files errored:               ${errors.length}\n`);
-  process.stdout.write(`Files skipped (too large):   ${skippedLargeFiles.length}\n`);
+  process.stdout.write(`Files scanned:                   ${totals.scanned}\n`);
+  process.stdout.write(`Files changed:                   ${totals.changed}\n`);
+  process.stdout.write(`Code-invariance violations:      ${invarianceViolations.length}\n`);
+  process.stdout.write(`Files errored:                   ${errors.length}\n`);
+  process.stdout.write(`Files skipped (too large):       ${skippedLargeFiles.length}\n`);
+  // Never silent, matching `skippedLargeFiles` below: a discovered `.html` file has nowhere else
+  // to show up in this report, so without this line it would just disappear from the totals
+  // entirely rather than visibly reading as "found, but no lexer yet."
+  if (totals.discoveredUnformattable > 0) {
+    process.stdout.write(`Files discovered, no lexer yet:  ${totals.discoveredUnformattable}\n`);
+  }
 
   if (errors.length > 0) {
     process.stdout.write('\nErrored files:\n');
