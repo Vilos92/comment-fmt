@@ -7,8 +7,9 @@ import {parseArgs} from 'node:util';
 import {DEFAULT_MAX_LENGTH, DEFAULT_TARGET_LENGTH} from '../core/constants.ts';
 import {measure} from '../core/measure.ts';
 import {ASCII_BOX_OR_TREE, BOX_DRAWING_CHARS, HAS_PIPE} from '../core/predicates.ts';
-import {format} from '../index.ts';
-import {findComments} from '../lang/js.ts';
+import {format, type Lang} from '../index.ts';
+import {findComments as findCommentsCss} from '../lang/css.ts';
+import {findComments as findCommentsJs} from '../lang/js.ts';
 
 /*
  * Types.
@@ -62,11 +63,21 @@ type DiffOp = {readonly kind: DiffOpKind; readonly line: string};
 const CONFIG_FILE_NAME = 'comment-fmt.json';
 
 /**
- * Extensions `format()` actually knows how to reflow. Only `lang/js.ts` exists so far (CSS and
- * HTML lexers are a later phase), so anything discovered outside this set is silently left alone
- * rather than reported as checked, written, or diffed.
+ * Extensions `format()` actually knows how to reflow. HTML has no lexer yet (plan §12 Phase 6's
+ * other half), so anything discovered outside this set is silently left alone rather than
+ * reported as checked, written, or diffed.
  */
-const FORMATTABLE_EXTENSIONS: ReadonlySet<string> = new Set(['.js', '.jsx', '.ts', '.tsx']);
+const FORMATTABLE_EXTENSIONS: ReadonlySet<string> = new Set(['.js', '.jsx', '.ts', '.tsx', '.css', '.scss']);
+
+/** Which `Lang` (plan §4) `format()` should use for a given formattable extension. */
+const LANG_BY_EXTENSION: Readonly<Record<string, Lang>> = {
+  '.js': 'js',
+  '.jsx': 'js',
+  '.ts': 'js',
+  '.tsx': 'js',
+  '.css': 'css',
+  '.scss': 'css'
+};
 
 /**
  * Full future language scope (plan §4/§12 Phase 6), used only to decide what file discovery turns
@@ -239,6 +250,7 @@ function formatFile(path: string, config: Config): FileResult {
   }
 
   const formatted = format(original, {
+    lang: LANG_BY_EXTENSION[extname(path)],
     maxLength: config.maxLength,
     targetLength: config.targetLength,
     extraDirectives: config.extraDirectives
@@ -446,7 +458,9 @@ function printOverwidthReport(results: readonly FileResult[], config: Config): v
  * failure mode positional matching had of throwing, or silently mismatching, on ordinary input.
  */
 function collectOverwidthFindings(result: FileResult, maxLength: number): OverwidthFinding[] {
-  const originalComments = findComments(result.original);
+  const findCommentsForPath =
+    LANG_BY_EXTENSION[extname(result.path)] === 'css' ? findCommentsCss : findCommentsJs;
+  const originalComments = findCommentsForPath(result.original);
 
   const findings: OverwidthFinding[] = [];
   for (const comment of originalComments) {

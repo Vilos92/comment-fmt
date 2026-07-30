@@ -3,9 +3,9 @@
 // `<name>.expected.<ext>`, eyeball it, commit both. Re-running without the env var just asserts
 // the formatter's output still matches the committed `.expected` file.
 //
-// Only `js` has a real formatter behind it as of Phase 2 (`lang/js.ts` + `core/`). `css` and
-// `html` lexers land in Phase 6, so those two langs fall back to an identity pass-through and
-// stay at zero fixtures until then.
+// `js` and `css` have real formatters behind them as of Phase 2 and Phase 6 (`lang/{js,css}.ts` +
+// `core/`). `html` has no lexer yet (Phase 6's other half), so it falls back to an identity
+// pass-through and stays at zero fixtures until then.
 import {existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync} from 'node:fs';
 import {dirname, join} from 'node:path';
 import {fileURLToPath} from 'node:url';
@@ -82,7 +82,7 @@ for (const lang of LANGS) {
  */
 
 function formatFixture(input: string, lang: Lang): string {
-  return lang === 'js' ? format(input) : input;
+  return lang === 'html' ? input : format(input, {lang});
 }
 
 function discoverFixtures(lang: Lang): FixtureCase[] {

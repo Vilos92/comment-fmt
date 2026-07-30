@@ -17,8 +17,10 @@ import {readFileSync, readdirSync, statSync} from 'node:fs';
 import type {Dirent} from 'node:fs';
 import {extname, join} from 'node:path';
 
-import {format} from '../../src/index.ts';
-import {findComments} from '../../src/lang/js.ts';
+import {format, type Lang} from '../../src/index.ts';
+import {findComments as findCommentsCss} from '../../src/lang/css.ts';
+import {findComments as findCommentsJs} from '../../src/lang/js.ts';
+import type {Comment} from '../../src/lang/types.ts';
 
 /*
  * Types.
@@ -27,6 +29,7 @@ import {findComments} from '../../src/lang/js.ts';
 type ScanTotals = {
   scanned: number;
   changed: number;
+  discoveredUnformattable: number;
 };
 
 type InvarianceViolation = {
@@ -51,7 +54,15 @@ type SkippedLargeFile = {
 // "enormous, free, and stylistically diverse"). Only version control internals are skipped.
 const DIRECTORIES_TO_SKIP: ReadonlySet<string> = new Set(['.git']);
 
-const FORMATTABLE_EXTENSIONS: ReadonlySet<string> = new Set(['.js', '.jsx', '.ts', '.tsx']);
+/** Which `Lang` (plan §4) each formattable extension maps to. HTML has no lexer yet. */
+const LANG_BY_EXTENSION: Readonly<Record<string, Lang>> = {
+  '.js': 'js',
+  '.jsx': 'js',
+  '.ts': 'js',
+  '.tsx': 'js',
+  '.css': 'css',
+  '.scss': 'css'
+};
 
 /**
  * Above this size, a file is skipped rather than scanned, and the skip is counted and reported
@@ -92,7 +103,7 @@ function main(): void {
     }
   }
 
-  const totals: ScanTotals = {scanned: 0, changed: 0};
+  const totals: ScanTotals = {scanned: 0, changed: 0, discoveredUnformattable: 0};
   const invarianceViolations: InvarianceViolation[] = [];
   const errors: FileError[] = [];
   const skippedLargeFiles: SkippedLargeFile[] = [];
@@ -128,16 +139,25 @@ function scanOneFile(
   invarianceViolations: InvarianceViolation[],
   errors: FileError[]
 ): void {
+  const lang = LANG_BY_EXTENSION[extname(path)];
+  if (!lang) {
+    // Walked and yielded by `walkFiles` (e.g. `.html`, no lexer yet), but never `scanned`: that
+    // total means "ran through `format()`," and this file never does. Tallied separately so the
+    // report still surfaces it instead of the file just vanishing with no accounting at all.
+    totals.discoveredUnformattable += 1;
+    return;
+  }
+
   totals.scanned += 1;
   try {
     const original = readFileSync(path, 'utf8');
-    const formatted = format(original);
+    const formatted = format(original, {lang});
 
     if (formatted !== original) {
       totals.changed += 1;
     }
 
-    if (nonCommentTokenStream(original) !== nonCommentTokenStream(formatted)) {
+    if (nonCommentTokenStream(original, lang) !== nonCommentTokenStream(formatted, lang)) {
       invarianceViolations.push({path});
     }
   } catch (error) {
@@ -152,8 +172,8 @@ function scanOneFile(
  * `nonCommentTokenStream` in `test/props/invariants.test.ts`, just against real files instead of
  * generated ones.
  */
-function nonCommentTokenStream(source: string): string {
-  const comments = findComments(source);
+function nonCommentTokenStream(source: string, lang: Lang): string {
+  const comments: readonly Comment[] = lang === 'css' ? findCommentsCss(source) : findCommentsJs(source);
   let residual = source;
   for (let i = comments.length - 1; i >= 0; i -= 1) {
     const comment = comments[i];
@@ -165,8 +185,10 @@ function nonCommentTokenStream(source: string): string {
 }
 
 /**
- * Recursively yields every formattable file under `root`, skipping `.git` only (not
- * `node_modules`). A descendant directory that goes unreadable partway through (permissions,
+ * Recursively yields every discoverable file under `root` (any extension `LANG_BY_EXTENSION`
+ * knows, plus `.html` so it's at least tallied in `discoveredUnformattable` even before it has a
+ * lexer, rather than the walk skipping it in silence), skipping `.git` only (not `node_modules`).
+ * A descendant directory that goes unreadable partway through (permissions,
  * a broken symlink, a race with something deleting it mid-scan) is recorded into `errors` and
  * skipped, not allowed to throw out of the generator: one bad directory deep in a 589,000-file
  * corpus shouldn't abort every root still left to scan, and `main()` already fails the run overall
@@ -195,7 +217,7 @@ function* walkFiles(
       }
       continue;
     }
-    if (entry.isFile() && FORMATTABLE_EXTENSIONS.has(extname(entry.name))) {
+    if (entry.isFile() && (LANG_BY_EXTENSION[extname(path)] || extname(path) === '.html')) {
       let bytes: number;
       try {
         bytes = statSync(path).size;
@@ -239,11 +261,17 @@ function printReport(
 
   process.stdout.write('Corpus scan summary\n');
   process.stdout.write('--------------------\n');
-  process.stdout.write(`Files scanned:              ${totals.scanned}\n`);
-  process.stdout.write(`Files changed:               ${totals.changed}\n`);
-  process.stdout.write(`Code-invariance violations:  ${invarianceViolations.length}\n`);
-  process.stdout.write(`Files errored:               ${errors.length}\n`);
-  process.stdout.write(`Files skipped (too large):   ${skippedLargeFiles.length}\n`);
+  process.stdout.write(`Files scanned:                   ${totals.scanned}\n`);
+  process.stdout.write(`Files changed:                   ${totals.changed}\n`);
+  process.stdout.write(`Code-invariance violations:      ${invarianceViolations.length}\n`);
+  process.stdout.write(`Files errored:                   ${errors.length}\n`);
+  process.stdout.write(`Files skipped (too large):       ${skippedLargeFiles.length}\n`);
+  // Never silent, matching `skippedLargeFiles` below: a discovered `.html` file has nowhere else
+  // to show up in this report, so without this line it would just disappear from the totals
+  // entirely rather than visibly reading as "found, but no lexer yet."
+  if (totals.discoveredUnformattable > 0) {
+    process.stdout.write(`Files discovered, no lexer yet:  ${totals.discoveredUnformattable}\n`);
+  }
 
   if (errors.length > 0) {
     process.stdout.write('\nErrored files:\n');

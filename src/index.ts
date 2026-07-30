@@ -2,14 +2,25 @@ import {splitIntoBlocks} from './core/blocks.ts';
 import {DEFAULT_MAX_LENGTH} from './core/constants.ts';
 import {measure} from './core/measure.ts';
 import {wrap, type WrapOptions} from './core/wrap.ts';
-import {findComments} from './lang/js.ts';
+import {findComments as findCommentsCss} from './lang/css.ts';
+import {findComments as findCommentsJs} from './lang/js.ts';
 import type {Comment} from './lang/types.ts';
 
 /*
  * Types.
  */
 
-export type FormatOptions = WrapOptions;
+/** Every language `format()` can reflow comments for (plan §4). */
+export type Lang = 'js' | 'css';
+
+export type FormatOptions = WrapOptions & {
+  /**
+   * Which lexer to find comments with (plan §4). Defaults to `'js'` so every existing caller
+   * (the JS/TS/JSX/TSX-only callers this library shipped with before CSS support existed) keeps
+   * working unchanged.
+   */
+  readonly lang?: Lang;
+};
 
 /*
  * Constants.
@@ -50,9 +61,10 @@ const IGNORE_MARKER_WHOLE_COMMENT = /^comment-fmt-ignore(\s*(--|:)\s*\S.*)?$/;
  */
 
 /**
- * Reflows every `//` and `/* *​/` comment in JS/TS/JSX/TSX source text to fit within
- * `options.maxLength` columns, without touching anything else. Non-comment code is guaranteed
- * byte-for-byte identical (see `test/props`, property 9.1.4).
+ * Reflows every comment in `source` to fit within `options.maxLength` columns, without touching
+ * anything else. Non-comment code is guaranteed byte-for-byte identical (see `test/props`,
+ * property 9.1.4). `options.lang` picks the lexer (plan §4); every reflow decision after that
+ * point is entirely language-agnostic, since every lexer returns the same `Comment` shape.
  *
  * A comment whose every physical line already fits is returned completely untouched, not just
  * "unchanged content re-serialized the same way." This function slices the original source
@@ -61,7 +73,8 @@ const IGNORE_MARKER_WHOLE_COMMENT = /^comment-fmt-ignore(\s*(--|:)\s*\S.*)?$/;
  * same applies, unconditionally, to any comment covered by the plan §8.4 escape hatch below.
  */
 export function format(source: string, options: FormatOptions = {}): string {
-  const comments = findComments(source);
+  const findCommentsForLang = options.lang === 'css' ? findCommentsCss : findCommentsJs;
+  const comments = findCommentsForLang(source);
   if (checkHasFileIgnore(source, comments)) {
     return source;
   }

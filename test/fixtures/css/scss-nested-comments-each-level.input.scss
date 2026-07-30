@@ -1,0 +1,11 @@
+.outer {
+  // top-level short comment
+  .middle {
+    // nested short comment
+    .inner {
+      // a genuinely long nested comment that pushes this line
+      // well past the one hundred and ten column limit for sure
+      color: red;
+    }
+  }
+}

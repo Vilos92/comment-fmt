@@ -13,16 +13,16 @@ strategy with case generation as an explicit, budgeted task (§9).
 Kept up to date as phases land. The rest of this document is the frozen v3 plan itself and doesn't
 change to reflect progress -- this section is the only part that does.
 
-| Phase                    | State       | Where                                                  |
-| ------------------------ | ----------- | ------------------------------------------------------ |
-| 1 -- Scaffold            | done        | [PR #1](https://github.com/Vilos92/comment-fmt/pull/1) |
-| 2 -- Core + JS lexer     | done        | [PR #2](https://github.com/Vilos92/comment-fmt/pull/2) |
-| 3 -- CLI                 | done        | [PR #3](https://github.com/Vilos92/comment-fmt/pull/3) |
-| 4 -- Differential corpus | done        | [PR #4](https://github.com/Vilos92/comment-fmt/pull/4) |
-| 5 -- Block reshape       | in this PR  | [PR #5](https://github.com/Vilos92/comment-fmt/pull/5) |
-| 6 -- CSS + HTML lexers   | not started |                                                        |
-| 7 -- Rollout and tuning  | not started |                                                        |
-| 8 -- Astro               | unscheduled | not committed to; see §4, §12                          |
+| Phase                    | State                            | Where                                                  |
+| ------------------------ | -------------------------------- | ------------------------------------------------------ |
+| 1 -- Scaffold            | done                             | [PR #1](https://github.com/Vilos92/comment-fmt/pull/1) |
+| 2 -- Core + JS lexer     | done                             | [PR #2](https://github.com/Vilos92/comment-fmt/pull/2) |
+| 3 -- CLI                 | done                             | [PR #3](https://github.com/Vilos92/comment-fmt/pull/3) |
+| 4 -- Differential corpus | done                             | [PR #4](https://github.com/Vilos92/comment-fmt/pull/4) |
+| 5 -- Block reshape       | done                             | [PR #5](https://github.com/Vilos92/comment-fmt/pull/5) |
+| 6 -- CSS + HTML lexers   | CSS in this PR, HTML not started | [PR #6](https://github.com/Vilos92/comment-fmt/pull/6) |
+| 7 -- Rollout and tuning  | not started                      |                                                        |
+| 8 -- Astro               | unscheduled                      | not committed to; see §4, §12                          |
 
 **PR #2** finished §12 Phase 2's scope: `core/{constants,measure,predicates,blocks,wrap}.ts` and
 `lang/js.ts`, plus `src/index.ts`'s `format()` wired to the real engine in place of the Phase 1
@@ -52,7 +52,7 @@ scan. A CodeRabbit review pass also caught a real positional-matching flaw in `-
 (a wrapped `//` comment legitimately becomes multiple comments once re-lexed, since each physical
 line starts its own `//`) that's fixed as of that PR's final commit.
 
-**PR #5 (this one) finishes** §12 Phase 5's scope, revised partway through review from the plan's
+**PR #5 finishes** §12 Phase 5's scope, revised partway through review from the plan's
 original two-threshold hysteresis design to something simpler and deliberately less aggressive.
 Block shape (§1) is a one-way ratchet, symmetric with how width already works: a single-line
 comment expands to the multi-line starred form when it overflows (the part of §1 that was only
@@ -97,6 +97,37 @@ time without surfacing anything beyond raw scale, every skip reported by path an
 silently shrinking coverage. The new size check's own `statSync` call is wrapped in the same
 try/catch-and-record pattern as the adjacent `readdirSync`, so a broken symlink or a TOCTOU race
 during a long scan fails that one file, not the run.
+
+**PR #6 (this one) is the CSS half** of §12 Phase 6's scope: `lang/css.ts` (`/* */` and SCSS `//`,
+skipping strings and `url(...)` contents -- including the specific `url(data:...base64,...)`
+adversarial case where a base64 payload can contain a stray `//`). The reflow logic in
+`src/index.ts`, the escape hatch, and directive protection needed zero changes to work correctly for
+CSS, confirmed directly: this is the payoff of §4's "every lexer returns the same `Comment` shape, so
+`core/` never learns what language it's in" design constraint. `format()` gained an `options.lang:
+'js' | 'css'` dispatch (default `'js'`, so every existing caller keeps working unchanged), and
+`src/cli/index.ts`/`test/corpus/run.ts` both learned to route `.css`/`.scss` files to it. The
+589,350+ file corpus re-run (now genuinely exercising CSS/SCSS for the first time, not just JS/TS)
+found zero code-invariance violations, both before and after a self-review pass that extracted
+scanning logic duplicated between `js.ts` and `css.ts` into a shared `lang/shared.ts` module. 15
+fixture pairs live under `test/fixtures/css/`, covering plan §14.9's adversarial case list.
+
+A later review round found the `url(...)` adversarial case only covered the literal spelling: CSS
+also permits `url` written with identifier escapes (`u\72l(...)` is spec-legal, decoding to the same
+`url`), and `checkIsUnquotedUrlStart`'s plain 3-character match missed it entirely, letting a `//` in
+an escaped-spelling `url(...)`'s payload get misdetected as an SCSS comment (confirmed: a base64
+payload's bytes got a stray space spliced in on reflow). Fixed with a bounded backward scan that
+falls back to decoding CSS identifier escapes only when the literal match fails, so the common case
+stays a cheap slice comparison. The `accident-url-slash-slash-not-comment` fixture now covers both
+spellings.
+
+**HTML is deliberately not in this PR.** It's a materially different problem from CSS: it needs to
+delegate `<script>`/`<style>` region contents to the JS/CSS lexers with position-offsetting (not a
+simple call-through, since a nested lexer's offsets are relative to the substring it was given, not
+the whole document), it carries a _stricter_ invariant than JS/CSS/SCSS (an HTML comment can never
+contain `--` _anywhere_ in its body, not just at the closing boundary, per the HTML spec -- §14.10's
+adversarial case list names this explicitly), and it has raw-text elements (`<textarea>`, `<pre>`)
+that don't parse as markup at all. This is exactly the kind of design surface worth resolving with
+the user's input before implementation, not deciding unilaterally partway through a phase.
 
 **Once Phase 7 lands, delete this file** -- and before deleting it, sweep every `(plan §N)` citation out
 of the codebase's comments first. It's a handoff document for building the tool, not permanent project

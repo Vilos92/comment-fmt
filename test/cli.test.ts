@@ -122,7 +122,18 @@ describe('cli', () => {
       expect(readFileSync(filePath, 'utf8')).toBe(original);
     });
 
-    test('skips a file extension with no formatter, such as .css, without error', () => {
+    test('skips a file extension with no formatter, such as .html, without error', () => {
+      const filePath = join(scratchDir, 'page.html');
+      const original = `${OVERFLOWING_COMMENT_LINE.replace('//', '<!--')} -->\n<body></body>\n`;
+      writeFileSync(filePath, original);
+
+      const exitCode = runCli(['--write', filePath], scratchDir);
+
+      expect(exitCode).toBe(0);
+      expect(readFileSync(filePath, 'utf8')).toBe(original);
+    });
+
+    test('reflows an overflowing .css comment in place (plan §12 Phase 6)', () => {
       const filePath = join(scratchDir, 'styles.css');
       const original = `${OVERFLOWING_COMMENT_LINE.replace('//', '/*')} */\nbody { color: red; }\n`;
       writeFileSync(filePath, original);
@@ -130,7 +141,9 @@ describe('cli', () => {
       const exitCode = runCli(['--write', filePath], scratchDir);
 
       expect(exitCode).toBe(0);
-      expect(readFileSync(filePath, 'utf8')).toBe(original);
+      const rewritten = readFileSync(filePath, 'utf8');
+      expect(rewritten).not.toBe(original);
+      expect(rewritten.split('\n').every(line => line.length <= 110)).toBe(true);
     });
   });
 
