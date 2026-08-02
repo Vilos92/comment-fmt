@@ -103,12 +103,8 @@ jobs:
           node-version: '24'
           cache: true
       - run: vp install
-      # `vp test` currently fails on any fresh vp-create scaffold, not just this repo: the aliased
-      # vitest package published to npm ships with no `bin` entry (see README). continue-on-error
-      # keeps this from blocking merges while still surfacing the moment it starts passing again.
       - name: Test
         run: vp run test
-        continue-on-error: true
 
   build:
     runs-on: ubuntu-latest

@@ -190,15 +190,6 @@ vp test
 vp pack
 ```
 
-## Known issues
-
-`vp test` currently fails on any fresh `vp create` scaffold, not just this repo: the `vitest`
-package it resolves to (aliased via the standard Vite+ `overrides` mechanism to
-`@voidzero-dev/vite-plus-test@latest`) is published to npm with no `bin` entry, so `vp test` can't
-find an entry point to invoke. Confirmed against the npm registry directly and reproduced across
-multiple `vite-plus` versions -- this isn't a config issue in this repo. CI runs the `test` job with
-`continue-on-error` until upstream fixes it; there is no local workaround today.
-
 ## License
 
 [MIT](LICENSE)

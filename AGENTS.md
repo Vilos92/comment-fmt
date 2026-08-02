@@ -91,15 +91,15 @@ Do **not** collapse these to single-line `/* Types. */`. Skip markers entirely o
 
 Non-trivial diff, or before commit: `vp check` then `vp test`. The CI jobs map onto local commands 1:1:
 
-| CI job        | Local command                                                                    |
-| ------------- | -------------------------------------------------------------------------------- |
-| `fmt`         | `vp run fmt:check`                                                               |
-| `lint`        | `vp run lint`                                                                    |
-| `typecheck`   | `vp run typecheck`                                                               |
-| `check`       | `vp run check`                                                                   |
-| `comment-fmt` | `vp run comment-fmt:check` — dogfoods this repo's own tool, from source          |
-| `test`        | `vp run test` — currently fails upstream regardless of local changes, see README |
-| `build`       | `vp run build`                                                                   |
+| CI job        | Local command                                                           |
+| ------------- | ----------------------------------------------------------------------- |
+| `fmt`         | `vp run fmt:check`                                                      |
+| `lint`        | `vp run lint`                                                           |
+| `typecheck`   | `vp run typecheck`                                                      |
+| `check`       | `vp run check`                                                          |
+| `comment-fmt` | `vp run comment-fmt:check` — dogfoods this repo's own tool, from source |
+| `test`        | `vp run test`                                                           |
+| `build`       | `vp run build`                                                          |
 
 ## Keeping this file useful
 
