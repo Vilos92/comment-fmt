@@ -1,9 +1,9 @@
 /**
- * Probe the corridor ahead, score lateral candidates, and produce a nudged pursuit target.
+ * Resolve a request in two passes.
  *
- * Two-tier scoring:
- *   1. Obstacle list (broad phase) → project nearby obstacles
- *      into the corridor frame → score overlap/distance.
- *   2. Rapier raycasts along the center corridor and each candidate lane → heavy penalty for hits.
+ * Passes:
+ *   1. Fast path checks the local cache first, then falls back
+ *      to the origin server, returning immediately on any hit.
+ *   2. Slow path re-validates every stale entry against the origin before returning, guaranteeing freshness.
  */
 function f() {}

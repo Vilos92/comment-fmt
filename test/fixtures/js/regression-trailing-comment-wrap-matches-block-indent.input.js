@@ -1,3 +1,3 @@
-function f() {
-  const CLIENT_INPUT_ENTRY_BYTES = 33; // seq(4) + steering.x/y/z(f32×3) + throttle(4) + isFiring(1) + aimPoint.x/y/z(f32×3)
+function g() {
+  const HEADER_BYTES = 12; // magic(4) + version(2) + flags(2) + payloadLength(4) + checksum(4) reserved for future use and validation
 }
