@@ -76,14 +76,6 @@ jobs:
       - name: Check
         run: vp run check
 
-  # Dogfoods the tool this repo builds: `vp staged` already runs `comment-fmt --write` on every
-  # commit (scripts/staged-write.sh), so nothing that reaches `main` should ever fail this. Runs
-  # from source, the same way the pre-commit hook does, not from a published dependency --
-  # comment-fmt formats its own repo before a published binary exists. Goes through the
-  # `comment-fmt:check` package.json script (`vp run comment-fmt:check`), like every other job in
-  # this file, rather than invoking `bun` directly in a bare shell step: a bare `run: bun ...`
-  # step doesn't have vp's managed bun on PATH and fails with "bun: command not found", confirmed
-  # live on this job's first real CI run.
   comment-fmt:
     runs-on: ubuntu-latest
 
