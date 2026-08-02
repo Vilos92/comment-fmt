@@ -40,7 +40,15 @@ type FreshBlockStyle = {
  * Constants.
  */
 
-const FIND_COMMENTS_BY_LANG: Readonly<Record<Lang, (source: string) => Comment[]>> = {
+/**
+ * Every lexer's `findComments`, by `Lang`. Exported (not module-private, unlike most of this
+ * file's constants) since `src/cli/index.ts` (`--report-overwidth`) and `test/corpus/run.ts`
+ * (`nonCommentTokenStream`) both need this exact same dispatch and used to each keep their own
+ * copy -- a real, if minor, DRY gap: three tables to update in lockstep every time a language is
+ * added, which is exactly what happened at each of `css`/`html`/`astro` landing. `src/index.ts` is
+ * already the natural single owner, since `format()` above does the same dispatch internally.
+ */
+export const FIND_COMMENTS_BY_LANG: Readonly<Record<Lang, (source: string) => Comment[]>> = {
   js: findCommentsJs,
   css: findCommentsCss,
   html: findCommentsHtml,

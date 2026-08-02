@@ -72,11 +72,7 @@ function fillBlock(
   orphanMinRatio: number
 ): string[] {
   const marker = LIST_MARKER.exec(lines[0] ?? '')?.[0];
-  // A marker so wide there's no room left to wrap into falls through to the plain path below: the
-  // marker (and whatever original indentation it carries) still ends up on line 1 either way, so
-  // this only changes whether continuation lines get a hanging indent, never whether the marker
-  // itself survives.
-  if (marker !== undefined && maxBudget - marker.length > 0) {
+  if (marker !== undefined) {
     return fillListItemBlock(lines, marker, maxBudget, targetBudget, orphanMinRatio);
   }
 
@@ -102,9 +98,16 @@ function fillBlock(
  *
  * `marker` (already known to be `lines[0]`'s own leading whitespace + bullet/number + trailing
  * spaces, exactly as the author wrote it) is spliced off before pooling words, wrapped at a budget
- * narrowed by the marker's own width, then re-attached: verbatim on line 1, as a same-width
- * hanging indent on every continuation line, so wrapped text lines up under the first word after
- * the marker -- the same convention markdown/JSDoc tooling already uses for wrapped list items.
+ * narrowed by the marker's own display width, then re-attached: verbatim on line 1, as a
+ * same-width hanging indent on every continuation line, so wrapped text lines up under the first
+ * word after the marker -- the same convention markdown/JSDoc tooling already uses for wrapped
+ * list items. Applies unconditionally, even when the marker's own width leaves no room to wrap
+ * into: `greedyFill` already keeps an unbreakable first word on its own line rather than crashing
+ * or looping on a non-positive budget, and that degraded-but-marker-faithful output is still
+ * better than the alternative of silently stripping the marker's indentation, which is exactly
+ * the bug this function exists to fix in the first place. `measure`, not `.length`, sizes the
+ * budget math (`marker.length` for the `.slice` below is correct as-is -- that's a raw
+ * string-index operation, not a display-width one).
  */
 function fillListItemBlock(
   lines: readonly string[],
@@ -123,9 +126,10 @@ function fillListItemBlock(
     return [...lines];
   }
 
-  const narrowedMax = maxBudget - marker.length;
-  const narrowedTarget = targetBudget - marker.length;
-  const hangingIndent = ' '.repeat(marker.length);
+  const markerWidth = measure(marker);
+  const narrowedMax = maxBudget - markerWidth;
+  const narrowedTarget = targetBudget - markerWidth;
+  const hangingIndent = ' '.repeat(markerWidth);
   const wrapped = applyOrphanGuard(
     greedyFill(words, narrowedTarget, narrowedMax),
     narrowedMax,

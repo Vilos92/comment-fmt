@@ -17,11 +17,7 @@ import {readFileSync, readdirSync, statSync} from 'node:fs';
 import type {Dirent} from 'node:fs';
 import {extname, join} from 'node:path';
 
-import {format, type Lang} from '../../src/index.ts';
-import {findComments as findCommentsAstro} from '../../src/lang/astro.ts';
-import {findComments as findCommentsCss} from '../../src/lang/css.ts';
-import {findComments as findCommentsHtml} from '../../src/lang/html.ts';
-import {findComments as findCommentsJs} from '../../src/lang/js.ts';
+import {FIND_COMMENTS_BY_LANG, format, type Lang} from '../../src/index.ts';
 import type {Comment} from '../../src/lang/types.ts';
 
 /*
@@ -66,14 +62,6 @@ const LANG_BY_EXTENSION: Readonly<Record<string, Lang>> = {
   '.scss': 'css',
   '.html': 'html',
   '.astro': 'astro'
-};
-
-/** `nonCommentTokenStream`'s own comment-finding pass, per `Lang`. */
-const FIND_COMMENTS_BY_LANG: Readonly<Record<Lang, (source: string) => Comment[]>> = {
-  js: findCommentsJs,
-  css: findCommentsCss,
-  html: findCommentsHtml,
-  astro: findCommentsAstro
 };
 
 /**
@@ -153,9 +141,12 @@ function scanOneFile(
 ): void {
   const lang = LANG_BY_EXTENSION[extname(path)];
   if (!lang) {
-    // Walked and yielded by `walkFiles` (e.g. `.html`, no lexer yet), but never `scanned`: that
-    // total means "ran through `format()`," and this file never does. Tallied separately so the
-    // report still surfaces it instead of the file just vanishing with no accounting at all.
+    // Unreachable today: `walkFiles` only yields extensions `LANG_BY_EXTENSION` already knows
+    // (`.html` and `.astro` both have real lexers now), so `lang` is never actually undefined
+    // here currently. Kept wired up for the next language this scope widens for before its lexer
+    // lands -- the same bridging period `.html` itself went through -- so that file is tallied
+    // separately rather than the report just losing track of it once discovery outpaces lexers
+    // again.
     totals.discoveredUnformattable += 1;
     return;
   }

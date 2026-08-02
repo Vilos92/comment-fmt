@@ -14,23 +14,29 @@ type TagInfo = {
   readonly name: string;
   readonly isClosing: boolean;
   readonly selfClosing: boolean;
+  /** The `type` attribute's raw value, if the tag has one (quoted form only -- see `scanTag`). */
+  readonly type: string | undefined;
 };
 
 /**
  * How each element's content is treated once its opening tag is seen. `'skip'` elements
- * (`<pre>`, `<textarea>`, `<title>`, `<noscript>`) are never scanned for comments at all, for two
- * different reasons that land on the same handling. `<textarea>`/`<title>` are RCDATA elements and
- * `<noscript>` (when scripting is enabled, the ordinary browser case) is a raw-text element per the
- * WHATWG spec -- two distinct categories, but the same practical consequence: a `<!-- -->`-looking
- * substring inside any of them is literal data, never a real comment node. (`<script>`/`<style>`
- * are also raw-text, but their content is genuinely JS/CSS worth reflowing, so they're
- * `'delegate-*'` instead of `'skip'`.) `<pre>` content *is* real, parsed markup -- a comment inside
- * it is a genuine comment, and it's never rendered regardless of what element contains it, so
- * touching one has no rendering effect either way -- but `<pre>` is HTML's strongest signal that an
- * author wants this content preserved exactly as authored, and that's worth respecting for
- * everything inside it, comments included, matching this project's own conservative "if uncertain,
- * don't touch it" bias. `'delegate-js'`/`'delegate-css'` elements (`<script>`, `<style>`) hand their
- * body to the JS/CSS lexer to find real `//`/`/* *​/` comments within, per plan §4.
+ * (`<pre>`, `<textarea>`, `<title>`, `<noscript>`, and a `<script>` whose `type` isn't JavaScript --
+ * see `checkIsJsScriptType`) are never scanned for comments at all, for several different reasons
+ * that land on the same handling. `<textarea>`/`<title>` are RCDATA elements and `<noscript>` (when
+ * scripting is enabled, the ordinary browser case) is a raw-text element per the WHATWG spec -- two
+ * distinct categories, but the same practical consequence: a `<!-- -->`-looking substring inside
+ * any of them is literal data, never a real comment node. A non-JS `<script>` (`application/
+ * ld+json`, `importmap`, or a template engine's own made-up type like `text/x-handlebars-template`)
+ * is inert data too, and critically its content isn't JavaScript *syntax* at all, so running it
+ * through the JS lexer is a real correctness bug, not just a classification nicety -- confirmed
+ * live: template text like `Don't worry, we'll handle it. // ...` got its trailing `//` treated as
+ * a real comment and reflowed, silently rewrapping literal output text. `<pre>` content *is* real,
+ * parsed markup -- a comment inside it is a genuine comment, and it's never rendered regardless of
+ * what element contains it, so touching one has no rendering effect either way -- but `<pre>` is
+ * HTML's strongest signal that an author wants this content preserved exactly as authored, and
+ * that's worth respecting for everything inside it, comments included, matching this project's own
+ * conservative "if uncertain, don't touch it" bias. `'delegate-js'`/`'delegate-css'` elements hand
+ * their body to the JS/CSS lexer to find real `//`/`/* *​/` comments within, per plan §4.
  */
 type OpaqueKind = 'skip' | 'delegate-js' | 'delegate-css';
 
@@ -44,8 +50,37 @@ const CLOSE = '-->';
 const TAG_NAME_START = /[a-zA-Z]/;
 const TAG_NAME_PART = /[a-zA-Z0-9-]/;
 
+/** Matches immediately before an attribute value's opening quote when that attribute is `type`. */
+const TYPE_ATTR_BEFORE_QUOTE = /\btype\s*=\s*$/i;
+
+/**
+ * JavaScript MIME type essence strings per the WHATWG spec's "classic script" definition
+ * (https://html.spec.whatwg.org/multipage/scripting.html#category-label-script-js) -- a `<script>`
+ * whose `type` matches one of these case-insensitively, or has no `type` attribute at all, or an
+ * empty one, executes as JavaScript. `module` is handled separately below (also real JS, just
+ * module-scoped). Anything else means the element is inert data to the browser and its content
+ * isn't JS syntax at all.
+ */
+const JS_MIME_TYPES: ReadonlySet<string> = new Set([
+  'application/ecmascript',
+  'application/javascript',
+  'application/x-ecmascript',
+  'application/x-javascript',
+  'text/ecmascript',
+  'text/javascript',
+  'text/javascript1.0',
+  'text/javascript1.1',
+  'text/javascript1.2',
+  'text/javascript1.3',
+  'text/javascript1.4',
+  'text/javascript1.5',
+  'text/jscript',
+  'text/livescript',
+  'text/x-ecmascript',
+  'text/x-javascript'
+]);
+
 const OPAQUE_ELEMENTS: ReadonlyMap<string, OpaqueKind> = new Map([
-  ['script', 'delegate-js'],
   ['style', 'delegate-css'],
   ['pre', 'skip'],
   ['textarea', 'skip'],
@@ -105,7 +140,7 @@ export function findComments(source: string, start = 0, end = source.length): Co
     }
 
     if (!tag.isClosing && !tag.selfClosing) {
-      const opaque = OPAQUE_ELEMENTS.get(tag.name);
+      const opaque = computeOpaqueKind(tag);
       if (opaque) {
         const bodyEnd = findRawTextEnd(source, tag.end, tag.name);
         if (opaque !== 'skip') {
@@ -173,9 +208,16 @@ function buildHtmlComment(source: string, start: number, span: HtmlCommentSpan):
 /**
  * Scans a tag positioned on `<`, skipping quoted attribute values as opaque spans (HTML attribute
  * values have no backslash-escape syntax, unlike a JS/CSS string, so a literal `\` inside one has
- * no special meaning and must not be treated as escaping the following character). Returns
- * `undefined` for something that isn't actually a tag (a bare `<` in text) or an unterminated one
- * at EOF, so the caller can fall back to treating `<` as an ordinary character.
+ * no special meaning and must not be treated as escaping the following character), while also
+ * capturing the `type` attribute's value if the tag has one. Returns `undefined` for something
+ * that isn't actually a tag (a bare `<` in text) or an unterminated one at EOF, so the caller can
+ * fall back to treating `<` as an ordinary character.
+ *
+ * Only the quoted form of `type="..."`/`type='...'` is recognized -- an unquoted `type=foo` is
+ * technically spec-legal but rare enough in practice (rarer still for a MIME-type-shaped value,
+ * which usually gets quoted because of its `/`) that skipping it is an acceptable, documented gap:
+ * it just falls back to treating the tag as if it had no `type` at all, the same as today's
+ * behavior, not a new failure mode.
  */
 function scanTag(source: string, start: number): TagInfo | undefined {
   const n = source.length;
@@ -195,14 +237,20 @@ function scanTag(source: string, start: number): TagInfo | undefined {
   }
   const name = source.slice(nameStart, i).toLowerCase();
 
+  let type: string | undefined;
   while (i < n) {
     const ch = source[i];
     if (ch === '"' || ch === "'") {
-      i = scanAttributeValue(source, i, ch);
+      const isTypeAttr = TYPE_ATTR_BEFORE_QUOTE.test(source.slice(Math.max(0, i - 20), i));
+      const valueEnd = scanAttributeValue(source, i, ch);
+      if (isTypeAttr && type === undefined) {
+        type = source.slice(i + 1, valueEnd - 1);
+      }
+      i = valueEnd;
       continue;
     }
     if (ch === '>') {
-      return {end: i + 1, name, isClosing, selfClosing: source[i - 1] === '/'};
+      return {end: i + 1, name, isClosing, selfClosing: source[i - 1] === '/', type};
     }
     i += 1;
   }
@@ -213,6 +261,26 @@ function scanTag(source: string, start: number): TagInfo | undefined {
 function scanAttributeValue(source: string, start: number, quote: string): number {
   const closeIdx = source.indexOf(quote, start + 1);
   return closeIdx === -1 ? source.length : closeIdx + 1;
+}
+
+/**
+ * `<script>`'s classification depends on its `type` attribute (see `checkIsJsScriptType`), so it's
+ * handled separately from the static `OPAQUE_ELEMENTS` lookup every other element uses.
+ */
+function computeOpaqueKind(tag: TagInfo): OpaqueKind | undefined {
+  if (tag.name === 'script') {
+    return checkIsJsScriptType(tag.type) ? 'delegate-js' : 'skip';
+  }
+  return OPAQUE_ELEMENTS.get(tag.name);
+}
+
+/** `true` for an omitted/empty `type`, a recognized JS MIME type, or `module` -- see `JS_MIME_TYPES`. */
+function checkIsJsScriptType(type: string | undefined): boolean {
+  if (type === undefined || type.trim() === '') {
+    return true;
+  }
+  const normalized = type.trim().toLowerCase();
+  return normalized === 'module' || JS_MIME_TYPES.has(normalized);
 }
 
 /**

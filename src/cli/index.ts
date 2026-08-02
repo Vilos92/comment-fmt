@@ -7,11 +7,7 @@ import {parseArgs} from 'node:util';
 import {DEFAULT_MAX_LENGTH, DEFAULT_TARGET_LENGTH} from '../core/constants.ts';
 import {measure} from '../core/measure.ts';
 import {ASCII_BOX_OR_TREE, BOX_DRAWING_CHARS, HAS_PIPE} from '../core/predicates.ts';
-import {format, type Lang} from '../index.ts';
-import {findComments as findCommentsAstro} from '../lang/astro.ts';
-import {findComments as findCommentsCss} from '../lang/css.ts';
-import {findComments as findCommentsHtml} from '../lang/html.ts';
-import {findComments as findCommentsJs} from '../lang/js.ts';
+import {FIND_COMMENTS_BY_LANG, format, type Lang} from '../index.ts';
 
 /*
  * Types.
@@ -90,14 +86,6 @@ const LANG_BY_EXTENSION: Readonly<Record<string, Lang>> = {
   '.scss': 'css',
   '.html': 'html',
   '.astro': 'astro'
-};
-
-/** `--report-overwidth`'s own comment-finding pass, per `Lang` (plan §9.3). */
-const FIND_COMMENTS_BY_LANG: Readonly<Record<Lang, (source: string) => ReturnType<typeof findCommentsJs>>> = {
-  js: findCommentsJs,
-  css: findCommentsCss,
-  html: findCommentsHtml,
-  astro: findCommentsAstro
 };
 
 /**

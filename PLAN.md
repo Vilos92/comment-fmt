@@ -160,11 +160,11 @@ conservative bias this project already applies elsewhere), and delegates `<scrip
 in §4. Both WHATWG-defined degenerate short forms (`<!-->`, `<!--->`) are handled explicitly
 -- getting either wrong would search onward for the _next_ real `-->` and swallow everything up to it as
 one comment, a genuine corruption bug caught by construction, not by testing after the fact. `src/index.ts`
-gained a per-language `FreshBlockStyle` (JS/CSS keep the JSDoc `* ` convention when a comment expands from
+gained a per-language `FreshBlockStyle` (JS/CSS keep the JSDoc `*` convention when a comment expands from
 single-line; HTML has none, so it gets plain indentation with the closer flush at the opener's own column)
 and `Comment` gained an optional `lang` field so a comment delegated from `<script>`/`<style>` keeps its
 own language's style even inside an `html`-mode `format()` call -- confirmed as a needed fix, not
-theoretical: an early version lost `<style>`'s `* ` convention entirely because `reflowBlockComment` only
+theoretical: an early version lost `<style>`'s `*` convention entirely because `reflowBlockComment` only
 ever consulted the top-level `format()` call's own `lang`.
 
 `lang/astro.ts` splits a file at its `---` frontmatter fence (files may have none at all), delegating the
