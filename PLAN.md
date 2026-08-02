@@ -201,6 +201,27 @@ lexer (JS/CSS/HTML/Astro) uniformly, not just JS. Two regression fixtures added
 zero code-invariance violations and the same 5,027-file changed count as before the fix (expected -- this
 changes _how_ overflowing list items wrap, not _which_ files have anything to wrap).
 
+**A second, separate real bug surfaced in the same `scriptlancer` self-review, also fixed here:**
+`reflowLineComment` indented every continuation line of a wrapped `//` comment by `comment.indent`,
+which for a trailing comment (`const X = 1; // ...`) measures the column `//` itself starts at --
+including the code before it -- producing a continuation line column-aligned under the original
+`//`. That alignment doesn't survive a real code formatter: confirmed directly against `oxfmt`
+(`vp check` failing on exactly the two files using this pattern, `packages/shared/src/protocol/
+{codec,matchPhase}.ts`), which treats a comment-only line as belonging to its enclosing block and
+silently re-indents it to the block's own level on every run, regardless of hook ordering, since an
+editor's own format-on-save runs independently of any git hook. Fixed with a new `computeLineIndent`
+helper (leading whitespace of the comment's own physical line, stopping at the first non-whitespace
+character) used for continuation-line indentation specifically, instead of `comment.indent`; the two
+already coincide for an own-line comment, so this only changes the trailing case. Confirmed the fix
+converges with `oxfmt`: `vp check` in `scriptlancer` passes clean afterward. Three existing fixtures
+that had asserted the old column-aligned output were updated, and a new
+`regression-trailing-comment-wrap-matches-block-indent` fixture covers the case that surfaced this
+(a nested trailing comment inside a function body, confirming continuation lines match the block's
+own indent, not just column 0). Also fixed: this section's own stale "comment-fmt runs before the
+formatter" leftover a few paragraphs below, which directly contradicted this section's already-
+corrected "runs last" guidance above it and turned out, once actually tested, to describe the
+ordering that causes this exact bug.
+
 **Once Phase 7 lands, delete this file** -- and before deleting it, sweep every `(plan §N)` citation out
 of the codebase's comments first. It's a handoff document for building the tool, not permanent project
 documentation, and every comment that cites it (13+ across `src/`, `test/`, and `AGENTS.md` as of this
@@ -797,9 +818,17 @@ pre-commit:
 "lint": "vp lint && comment-fmt --check ."      // the three vp repos
 ```
 
-**Ordering matters:** `comment-fmt` runs _before_ the formatter, so Biome/oxfmt gets the last word and
-can't be surprised by our output. Verify on a real file that the two converge — if `biome check --write`
-reflows what we just wrote, or vice versa, you have a fight and must narrow our scope.
+**This CI ordering doesn't contradict "`comment-fmt` runs last" above.** `--check` only validates,
+never rewrites, so there's no "who goes first" question here the way there is for the `--write` hook
+step: by the time CI runs, the pre-commit hook has already converged the file (`comment-fmt` had the
+last word there), and `biome ci`/`vp lint` running before `comment-fmt --check` in these scripts just
+means the language formatter's own check fails fast first, which is arbitrary ordering for two
+independent validations, not a re-derivation of formatting. (An earlier draft of this section
+asserted the opposite -- "comment-fmt runs before the formatter" -- for the pre-commit hook itself.
+That was the stale, uncorrected version this section's own top paragraph already flags as wrong;
+confirmed wrong in practice too, not just in theory, the first time a real rollout repo actually hit
+this: `comment-fmt`-then-`oxfmt` produced a wrapped trailing comment whose continuation line `oxfmt`
+promptly re-indented right back out from under it, on every single run.)
 
 ### README
 

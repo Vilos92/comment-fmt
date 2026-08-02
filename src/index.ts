@@ -203,7 +203,7 @@ function reflowComment(source: string, comment: Comment, options: FormatOptions)
   }
 
   return comment.kind === 'line'
-    ? reflowLineComment(comment, raw, options)
+    ? reflowLineComment(source, comment, raw, options)
     : reflowBlockComment(comment, raw, options);
 }
 
@@ -213,11 +213,22 @@ function fitsWithinLimit(raw: string, indent: number, maxLength: number): boolea
 
 /**
  * Reflows a `//` comment: strips the opener and any leading whitespace, wraps the remaining text
- * with `wrap()`, then re-applies `//` to the first line and `<indent>//` to every continuation
- * line (a line comment has no per-line decoration of its own to preserve, unlike a block
- * comment's ` * `).
+ * with `wrap()`, then re-applies `//` to the first line and `<continuationIndent>//` to every
+ * continuation line (a line comment has no per-line decoration of its own to preserve, unlike a
+ * block comment's ` * `).
+ *
+ * Continuation lines deliberately use `computeLineIndent`, not `comment.indent`, for their leading
+ * whitespace. For an own-line comment the two are identical (nothing but whitespace precedes it
+ * either way). For a trailing comment (`const X = 1; // ...`) they diverge: `comment.indent`
+ * measures the column `//` starts at, which includes the code before it, while
+ * `computeLineIndent` measures only the line's real leading whitespace. Aligning a wrapped
+ * trailing comment's continuation under the original `//`'s column looked reasonable but doesn't
+ * survive contact with a real code formatter: confirmed directly against `oxfmt`, which treats a
+ * comment-only line as belonging to its enclosing block and re-indents it to the block's own
+ * level, silently stripping any column alignment on every run. `computeLineIndent` already matches
+ * what the formatter converges to, so nothing fights on the next pass.
  */
-function reflowLineComment(comment: Comment, raw: string, options: FormatOptions): string {
+function reflowLineComment(source: string, comment: Comment, raw: string, options: FormatOptions): string {
   const content = raw.slice(comment.open.length).replace(/^[ \t]+/, '');
   const prefixWidth = comment.indent + comment.open.length + 1; // Reconstructed as `// `.
   const wrapped = wrap([content], prefixWidth, options);
@@ -237,7 +248,7 @@ function reflowLineComment(comment: Comment, raw: string, options: FormatOptions
     // `wrap()`'s own budget (which assumes exactly one space) reads it as already fitting.
     return raw;
   }
-  const indentStr = ' '.repeat(comment.indent);
+  const indentStr = ' '.repeat(computeLineIndent(source, comment.start));
 
   return wrapped
     .map((line, idx) => {
@@ -364,6 +375,22 @@ function joinPrefixAndContent(prefix: string, content: string): string {
 function checkIsProtectedLine(line: string, extraDirectives: readonly string[] | undefined): boolean {
   const blocks = splitIntoBlocks([line], extraDirectives ?? []);
   return blocks[0]?.protected ?? false;
+}
+
+/**
+ * Leading whitespace of the physical line containing `offset`, stopping at the first
+ * non-whitespace character. Distinct from `lang/shared.ts`'s `computeIndent`, which measures the
+ * column `offset` itself sits at (everything before it, not just whitespace) -- the two coincide
+ * for an own-line comment, but diverge for a trailing one, which is exactly the case this exists
+ * to handle. See `reflowLineComment`'s own docs for why that divergence matters.
+ */
+function computeLineIndent(source: string, offset: number): number {
+  const lineStart = source.lastIndexOf('\n', offset - 1) + 1;
+  let i = lineStart;
+  while (i < source.length && (source[i] === ' ' || source[i] === '\t')) {
+    i += 1;
+  }
+  return i - lineStart;
 }
 
 function stripLinePrefix(line: string, prefix: string): string {
