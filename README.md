@@ -11,6 +11,8 @@ you already use.
 npm install --save-dev comment-fmt
 ```
 
+Requires Node 20+ or Bun. Ships as ESM only, zero runtime dependencies.
+
 ## Before / after
 
 ```diff
@@ -83,7 +85,7 @@ Most formatters either don't touch comment prose at all, or treat it as an after
 
 | Tool                                                                                          | Reflows comment prose?                                                                                    |
 | --------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
-| [`eslint-plugin-comment-length`](https://github.com/lasselupe33/eslint-plugin-comment-length) | Same goal, as an ESLint rule. JS/TS only. The closest prior art here.                                     |
+| [`eslint-plugin-comment-length`](https://github.com/lasselupe33/eslint-plugin-comment-length) | The only other tool here with the same goal, as an ESLint rule. JS/TS only.                               |
 | Prettier                                                                                      | Repositions and re-indents comments, never reflows their text. By design.                                 |
 | Biome                                                                                         | Same stance as Prettier, on purpose.                                                                      |
 | gofmt                                                                                         | Leaves comment text untouched entirely.                                                                   |
@@ -119,6 +121,9 @@ format(source, {lang: 'js'}); // 'js' | 'css' | 'html' | 'astro', defaults to 'j
 // reflows over-width // and /* */ comments; everything else is untouched
 ```
 
+`lang` picks the lexer, not the file extension: JSX and TSX both use `'js'`, SCSS uses `'css'`. The
+CLI maps extensions to the right `lang` for you; a direct `format()` call needs the mapping above.
+
 ...and via the CLI. With no file arguments it discovers every tracked file through `git ls-files`,
 not a directory walk — a trailing `.` is treated as one explicit, literal file path that matches
 nothing and silently no-ops, so don't pass one:
@@ -131,7 +136,23 @@ comment-fmt --diff    # same output as --check, minus the "run --write to fix" t
 
 Both `--check` and `--diff` print a standard `diff -U3`-style unified diff, windowed to a few
 lines of context around each change with a `@@ -line,count +line,count @@` header, so a CI failure
-is readable straight from the log without re-running anything locally.
+is readable straight from the log without re-running anything locally:
+
+```diff
+Run comment-fmt --write to apply the fix shown below.
+
+--- src/network/withRetry.ts
++++ src/network/withRetry.ts
+@@ -1,4 +1,7 @@
+-/** Retries a flaky network call up to `maxAttempts` times, doubling the delay between each attempt before giving up. */
++/**
++ * Retries a flaky network call up to `maxAttempts` times,
++ * doubling the delay between each attempt before giving up.
++ */
+ export function withRetry(fn: () => Promise<void>, maxAttempts = 3) {
+   return fn();
+ }
+```
 
 Or pass explicit files, the pre-commit hook path, where the staged-file runner already narrowed the
 list down and no discovery is needed:
