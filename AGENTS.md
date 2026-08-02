@@ -97,7 +97,7 @@ Non-trivial diff, or before commit: `vp check` then `vp test`. The CI jobs map o
 | `lint`        | `vp run lint`                                                                    |
 | `typecheck`   | `vp run typecheck`                                                               |
 | `check`       | `vp run check`                                                                   |
-| `comment-fmt` | `bun src/cli/index.ts --check` — dogfoods this repo's own tool, from source      |
+| `comment-fmt` | `vp run comment-fmt:check` — dogfoods this repo's own tool, from source          |
 | `test`        | `vp run test` — currently fails upstream regardless of local changes, see README |
 | `build`       | `vp run build`                                                                   |
 
