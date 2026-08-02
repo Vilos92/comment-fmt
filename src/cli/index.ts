@@ -109,8 +109,8 @@ const IGNORE_TIP =
   'Tip: add // comment-fmt-ignore before a comment, or comment-fmt-ignore-file near the top ' +
   'of a file, to exempt it.';
 
-/** `--check`-only, printed above the file list: `--diff` already shows the fix, so doesn't need it. */
-const CHECK_FIX_TIP = 'Run comment-fmt --write to fix, or comment-fmt --diff to preview the changes.';
+/** `--check`-only, printed above the diff: `--write` applies the same fix directly. */
+const CHECK_FIX_TIP = 'Run comment-fmt --write to apply the fix shown below.';
 
 const USAGE = 'Usage: comment-fmt (--check | --write | --diff | --report-overwidth) [files...]';
 
@@ -213,15 +213,11 @@ export function runCli(argv: string[], cwd: string): number {
     return 0;
   }
 
-  if (mode === 'diff') {
-    for (const result of changed) {
-      process.stdout.write(`${renderDiff(relative(cwd, result.path), result.original, result.formatted)}\n`);
-    }
-  } else {
+  if (mode === 'check') {
     process.stdout.write(`${CHECK_FIX_TIP}\n\n`);
-    for (const result of changed) {
-      process.stdout.write(`${relative(cwd, result.path)}\n`);
-    }
+  }
+  for (const result of changed) {
+    process.stdout.write(`${renderDiff(relative(cwd, result.path), result.original, result.formatted)}\n`);
   }
   process.stdout.write(`\n${IGNORE_TIP}\n`);
   return 1;
