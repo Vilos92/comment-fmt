@@ -5,7 +5,7 @@ lines to a fixed width and normalises multi-line block comment shape. Meant to r
 hook, alongside your existing formatter.
 
 ```bash
-bun add -D comment-fmt   # or: npm install --save-dev comment-fmt
+npm install --save-dev comment-fmt
 ```
 
 ## Why
