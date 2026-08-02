@@ -1,4 +1,4 @@
-import {LIST_MARKER, splitIntoBlocks} from './blocks.ts';
+import {type Block, LIST_MARKER, splitIntoBlocks} from './blocks.ts';
 import {
   DEFAULT_MAX_LENGTH,
   DEFAULT_ORPHAN_MIN_RATIO,
@@ -32,7 +32,8 @@ export type WrapOptions = {
  * Five steps, referenced by number elsewhere in `core/`:
  *   0. Overflow-only gate: if every line already fits, return it byte-for-byte unchanged.
  *   1. Split the body into logical blocks (blank line / list-item / tag / fence boundaries).
- *   2. Greedily fill only the blocks that contain an overflowing line; others pass through.
+ *   2. Greedily fill every non-protected block in a blank-line-delimited cluster, once any block
+ *      in that cluster overflows.
  *   3. Orphan guard: re-lay out a short trailing line by pulling a word from the line before it.
  *   4. Hard invariant: no output line may ever exceed `maxLength`.
  *
@@ -45,6 +46,16 @@ export type WrapOptions = {
  * that could touch a hand-aligned table or ASCII diagram that already happens to fit. Untouched
  * input is the overwhelming common case, which is exactly why this gate matters more than any
  * heuristic downstream of it.
+ *
+ * Step 2 fills at cluster granularity, not block or whole-comment granularity. A cluster is a run
+ * of blocks between blank lines, and it fills in full (every non-protected block in it, not just
+ * the one that overflowed) as soon as any block inside it does. A `@tag` description sitting right
+ * below a paragraph that needed rewrapping is in the same blank-line-free cluster, so it gets
+ * filled to match rather than staying at whatever width it happened to be authored at -- the
+ * comment is already changing in this diff either way. A vendored license header is the
+ * counterexample this is scoped around: its paragraphs are blank-line separated, so one over-width
+ * URL deep in one paragraph doesn't drag the other, already-fitting paragraphs into a reflow,
+ * confirmed against real `node_modules` content in `test/corpus/`, not hypothetical.
  */
 export function wrap(lines: readonly string[], linePrefixWidth: number, options: WrapOptions = {}): string[] {
   const maxLength = options.maxLength ?? DEFAULT_MAX_LENGTH;
@@ -64,17 +75,51 @@ export function wrap(lines: readonly string[], linePrefixWidth: number, options:
     extraDirectives
   );
 
-  return blocks.flatMap(block => {
-    if (block.protected || block.lines.every(line => measure(line) <= maxBudget)) {
-      return block.lines;
-    }
-    return fillBlock(block.lines, maxBudget, targetBudget, orphanMinRatio);
+  return groupIntoParagraphClusters(blocks).flatMap(cluster => {
+    const needsFill = cluster.some(
+      block => !block.protected && block.lines.some(line => measure(line) > maxBudget)
+    );
+    return cluster.flatMap(block => {
+      if (block.protected || !needsFill) {
+        return block.lines;
+      }
+      return fillBlock(block.lines, maxBudget, targetBudget, orphanMinRatio);
+    });
   });
 }
 
 /*
  * Helpers.
  */
+
+/**
+ * Groups `blocks` into runs separated by blank-line blocks, the same boundary a reader already
+ * relies on to tell one paragraph/tag-run apart from the next. A blank-line block starts its own
+ * single-block cluster and is otherwise excluded, so it can never itself be swept into a
+ * neighboring cluster's fill decision.
+ */
+function groupIntoParagraphClusters(blocks: readonly Block[]): Block[][] {
+  const clusters: Block[][] = [];
+  let current: Block[] = [];
+
+  for (const block of blocks) {
+    const isBlankLine =
+      block.protected && block.lines.length === 1 && (block.lines[0] as string).trim() === '';
+    if (isBlankLine) {
+      if (current.length > 0) {
+        clusters.push(current);
+        current = [];
+      }
+      clusters.push([block]);
+      continue;
+    }
+    current.push(block);
+  }
+  if (current.length > 0) {
+    clusters.push(current);
+  }
+  return clusters;
+}
 
 /**
  * Splits an `@tag`-shaped token embedded mid-line onto its own physical line, so `blocks.ts`'s
