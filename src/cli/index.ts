@@ -356,19 +356,26 @@ function readStringArrayKey(
 }
 
 /**
- * Resolves the file list to operate on: explicit argv wins outright (the hook path, where
- * `lint-staged` already did the filtering), otherwise a git repo is discovered via `git ls-files`
- * (gitignore-respecting for free), otherwise a plain recursive `node:fs` walk. Only the discovery
- * paths apply `ignore` patterns; explicit argv is used as given.
+ * Resolves the file list to operate on: explicit argv (the pre-commit hook path, where
+ * `lint-staged` already narrowed to staged files) if given, otherwise a git repo is discovered via
+ * `git ls-files` (gitignore-respecting for free), otherwise a plain recursive `node:fs` walk.
+ * `ignore` patterns apply either way, so a hook that feeds every staged path as an explicit
+ * argument still respects `comment-fmt.json` the same way a discovery run does. Matches
+ * Prettier/ESLint/Biome's own convention of an ignore list applying regardless of how a file was
+ * named, rather than only during self-directed discovery.
  */
 function discoverFiles(positionals: readonly string[], cwd: string, ignore: readonly string[]): string[] {
-  if (positionals.length > 0) {
-    return positionals.map(path => (path.startsWith('/') ? path : join(cwd, path)));
-  }
-
-  const discovered = checkHasGitRepo(cwd) ? listGitFiles(cwd) : walkDirectory(cwd);
+  const files = positionals.length > 0 ? resolvePositionals(positionals, cwd) : discoverRepoFiles(cwd);
   const matchers = ignore.map(globToRegExp);
-  return discovered.filter(path => !matchers.some(matcher => matcher.test(relative(cwd, path))));
+  return files.filter(path => !matchers.some(matcher => matcher.test(relative(cwd, path))));
+}
+
+function resolvePositionals(positionals: readonly string[], cwd: string): string[] {
+  return positionals.map(path => (path.startsWith('/') ? path : join(cwd, path)));
+}
+
+function discoverRepoFiles(cwd: string): string[] {
+  return checkHasGitRepo(cwd) ? listGitFiles(cwd) : walkDirectory(cwd);
 }
 
 function checkHasGitRepo(cwd: string): boolean {

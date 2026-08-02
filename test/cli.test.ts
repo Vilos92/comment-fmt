@@ -296,7 +296,7 @@ describe('cli', () => {
       expect(stderr.join('')).toContain('positive');
     });
 
-    test('ignore patterns exclude discovered files but not explicit argv', () => {
+    test('ignore patterns exclude a file whether discovered or given explicitly', () => {
       writeFileSync(join(scratchDir, 'comment-fmt.json'), JSON.stringify({ignore: ['vendor/**']}));
       const vendorDir = join(scratchDir, 'vendor');
       mkdirSync(vendorDir, {recursive: true});
@@ -306,19 +306,19 @@ describe('cli', () => {
       writeFileSync(vendorPath, overflowing);
       writeFileSync(ownPath, overflowing);
 
-      // No argv: falls back to a plain recursive walk (scratchDir isn't a git repo), which is
-      // where `ignore` patterns apply. `own.js` still overflows and should be reported.
+      // No argv: falls back to a plain recursive walk (scratchDir isn't a git repo). `own.js`
+      // still overflows and should be reported; `vendor/lib.js` is excluded.
       const exitCodeDiscovered = runCli(['--check'], scratchDir);
       expect(exitCodeDiscovered).toBe(1);
       expect(stdout.join('')).toContain('own.js');
       expect(stdout.join('')).not.toContain('vendor');
 
       stdout = [];
-      // Given explicitly as argv, the same vendor file is formatted anyway: `ignore` only
-      // filters discovery.
+      // Given explicitly as argv (the lint-staged path, which always names files explicitly),
+      // `ignore` still applies: nothing to report, exit 0.
       const exitCodeExplicit = runCli(['--check', vendorPath], scratchDir);
-      expect(exitCodeExplicit).toBe(1);
-      expect(stdout.join('')).toContain('lib.js');
+      expect(exitCodeExplicit).toBe(0);
+      expect(stdout.join('')).toBe('');
     });
   });
 });

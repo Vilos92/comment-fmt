@@ -118,12 +118,12 @@ workflow.
 
 An optional `comment-fmt.json` in the repo root; most repos need no file at all:
 
-| Key               | Default | Notes                                                                                                    |
-| ----------------- | ------- | -------------------------------------------------------------------------------------------------------- |
-| `maxLength`       | `110`   | Hard cap. No output line may ever exceed it.                                                             |
-| `targetLength`    | `105`   | Soft wrap target; always `<= maxLength`.                                                                 |
-| `ignore`          | `[]`    | Glob patterns, filters file _discovery_ only -- an explicitly named file is always processed regardless. |
-| `extraDirectives` | `[]`    | Appended to the built-in protected-directive list.                                                       |
+| Key               | Default | Notes                                                                                                                                                                             |
+| ----------------- | ------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `maxLength`       | `110`   | Hard cap. No output line may ever exceed it.                                                                                                                                      |
+| `targetLength`    | `105`   | Soft wrap target; always `<= maxLength`.                                                                                                                                          |
+| `ignore`          | `[]`    | Glob patterns. Applies whether a file was found by discovery or named explicitly (the pre-commit hook path), so a pre-commit hook that feeds every staged path still skips these. |
+| `extraDirectives` | `[]`    | Appended to the built-in protected-directive list.                                                                                                                                |
 
 Everything else is intentionally hardcoded: no wrap-strategy option, no per-file overrides, no
 `ignoreUrls` toggle (URLs are always left unbroken), no `tabSize` (assumes 2).

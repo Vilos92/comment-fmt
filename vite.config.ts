@@ -15,14 +15,11 @@ export default defineConfig({
     // comment-fmt before the reindent happened. This must be an array, not one `&&`-joined
     // string: lint-staged does not spawn a shell for a command string, it splits on whitespace
     // and execs directly, so `&&` would be passed as a literal argument rather than run as a
-    // shell operator. `./scripts/staged-write.sh` runs this repo's own CLI from source (it
-    // dogfoods itself before a published `comment-fmt` binary exists) and filters out
-    // `test/fixtures/**` before doing so -- unlike `vp check --fix`, `comment-fmt --write` has no
-    // built-in exclusion for explicitly-named files (`ignore` in `comment-fmt.json` only filters
-    // discovery), and lint-staged feeds every staged path explicitly, so a staged fixture pair
-    // would otherwise get silently rewritten by the very tool it exists to test. Confirmed live,
-    // not theoretical: see the script's own header comment.
-    '*': ['vp check --fix', './scripts/staged-write.sh']
+    // shell operator. Runs this repo's own CLI from source (`bun src/cli/index.ts`), since it
+    // dogfoods itself before a published `comment-fmt` binary exists. `comment-fmt.json`'s
+    // `ignore` list already excludes `test/fixtures/**`, and that now applies even to the
+    // explicit staged paths lint-staged feeds it, so no separate filtering wrapper is needed.
+    '*': ['vp check --fix', 'bun src/cli/index.ts --write']
   },
   pack: {
     entry: ['src/index.ts', 'src/cli/index.ts'],
