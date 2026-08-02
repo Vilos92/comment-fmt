@@ -3,9 +3,8 @@
 // `<name>.expected.<ext>`, eyeball it, commit both. Re-running without the env var just asserts
 // the formatter's output still matches the committed `.expected` file.
 //
-// `js` and `css` have real formatters behind them as of Phase 2 and Phase 6 (`lang/{js,css}.ts` +
-// `core/`). `html` has no lexer yet (Phase 6's other half), so it falls back to an identity
-// pass-through and stays at zero fixtures until then.
+// `js`, `css`, `html`, and `astro` all have real formatters behind them as of Phase 2 and Phase 6
+// (`lang/{js,css,html,astro}.ts` + `core/`).
 import {existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync} from 'node:fs';
 import {dirname, join} from 'node:path';
 import {fileURLToPath} from 'node:url';
@@ -18,7 +17,7 @@ import {format} from '../src/index.ts';
  * Types.
  */
 
-type Lang = 'js' | 'css' | 'html';
+type Lang = 'js' | 'css' | 'html' | 'astro';
 
 type FixtureCase = {
   name: string;
@@ -30,7 +29,7 @@ type FixtureCase = {
  * Constants.
  */
 
-const LANGS: readonly Lang[] = ['js', 'css', 'html'];
+const LANGS: readonly Lang[] = ['js', 'css', 'html', 'astro'];
 const FIXTURES_DIR = fileURLToPath(new URL('./fixtures', import.meta.url));
 const INPUT_MARKER = '.input.';
 const UPDATE_SNAPSHOTS = process.env.UPDATE_SNAPSHOTS === '1';
@@ -52,7 +51,7 @@ for (const lang of LANGS) {
     for (const fixtureCase of cases) {
       test(fixtureCase.name, () => {
         const input = readFileSync(fixtureCase.inputPath, 'utf8');
-        const actual = formatFixture(input, lang);
+        const actual = format(input, {lang});
 
         if (UPDATE_SNAPSHOTS) {
           mkdirSync(dirname(fixtureCase.expectedPath), {recursive: true});
@@ -80,10 +79,6 @@ for (const lang of LANGS) {
 /*
  * Helpers.
  */
-
-function formatFixture(input: string, lang: Lang): string {
-  return lang === 'html' ? input : format(input, {lang});
-}
 
 function discoverFixtures(lang: Lang): FixtureCase[] {
   const dir = join(FIXTURES_DIR, lang);

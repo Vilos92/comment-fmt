@@ -17,9 +17,7 @@ import {readFileSync, readdirSync, statSync} from 'node:fs';
 import type {Dirent} from 'node:fs';
 import {extname, join} from 'node:path';
 
-import {format, type Lang} from '../../src/index.ts';
-import {findComments as findCommentsCss} from '../../src/lang/css.ts';
-import {findComments as findCommentsJs} from '../../src/lang/js.ts';
+import {FIND_COMMENTS_BY_LANG, format, type Lang} from '../../src/index.ts';
 import type {Comment} from '../../src/lang/types.ts';
 
 /*
@@ -54,14 +52,16 @@ type SkippedLargeFile = {
 // "enormous, free, and stylistically diverse"). Only version control internals are skipped.
 const DIRECTORIES_TO_SKIP: ReadonlySet<string> = new Set(['.git']);
 
-/** Which `Lang` (plan §4) each formattable extension maps to. HTML has no lexer yet. */
+/** Which `Lang` (plan §4) each formattable extension maps to. */
 const LANG_BY_EXTENSION: Readonly<Record<string, Lang>> = {
   '.js': 'js',
   '.jsx': 'js',
   '.ts': 'js',
   '.tsx': 'js',
   '.css': 'css',
-  '.scss': 'css'
+  '.scss': 'css',
+  '.html': 'html',
+  '.astro': 'astro'
 };
 
 /**
@@ -141,9 +141,12 @@ function scanOneFile(
 ): void {
   const lang = LANG_BY_EXTENSION[extname(path)];
   if (!lang) {
-    // Walked and yielded by `walkFiles` (e.g. `.html`, no lexer yet), but never `scanned`: that
-    // total means "ran through `format()`," and this file never does. Tallied separately so the
-    // report still surfaces it instead of the file just vanishing with no accounting at all.
+    // Unreachable today: `walkFiles` only yields extensions `LANG_BY_EXTENSION` already knows
+    // (`.html` and `.astro` both have real lexers now), so `lang` is never actually undefined
+    // here currently. Kept wired up for the next language this scope widens for before its lexer
+    // lands -- the same bridging period `.html` itself went through -- so that file is tallied
+    // separately rather than the report just losing track of it once discovery outpaces lexers
+    // again.
     totals.discoveredUnformattable += 1;
     return;
   }
@@ -173,7 +176,7 @@ function scanOneFile(
  * generated ones.
  */
 function nonCommentTokenStream(source: string, lang: Lang): string {
-  const comments: readonly Comment[] = lang === 'css' ? findCommentsCss(source) : findCommentsJs(source);
+  const comments: readonly Comment[] = FIND_COMMENTS_BY_LANG[lang](source);
   let residual = source;
   for (let i = comments.length - 1; i >= 0; i -= 1) {
     const comment = comments[i];
@@ -186,9 +189,10 @@ function nonCommentTokenStream(source: string, lang: Lang): string {
 
 /**
  * Recursively yields every discoverable file under `root` (any extension `LANG_BY_EXTENSION`
- * knows, plus `.html` so it's at least tallied in `discoveredUnformattable` even before it has a
- * lexer, rather than the walk skipping it in silence), skipping `.git` only (not `node_modules`).
- * A descendant directory that goes unreadable partway through (permissions,
+ * knows), skipping `.git` only (not `node_modules`). `discoveredUnformattable` stays wired up in
+ * `scanOneFile` for the next language this scope needs to widen for before its lexer lands (the
+ * same bridging period `.html` itself just went through), even though nothing currently discovered
+ * hits that branch. A descendant directory that goes unreadable partway through (permissions,
  * a broken symlink, a race with something deleting it mid-scan) is recorded into `errors` and
  * skipped, not allowed to throw out of the generator: one bad directory deep in a 589,000-file
  * corpus shouldn't abort every root still left to scan, and `main()` already fails the run overall
@@ -217,7 +221,7 @@ function* walkFiles(
       }
       continue;
     }
-    if (entry.isFile() && (LANG_BY_EXTENSION[extname(path)] || extname(path) === '.html')) {
+    if (entry.isFile() && LANG_BY_EXTENSION[extname(path)]) {
       let bytes: number;
       try {
         bytes = statSync(path).size;

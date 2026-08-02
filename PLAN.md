@@ -13,16 +13,16 @@ strategy with case generation as an explicit, budgeted task (§9).
 Kept up to date as phases land. The rest of this document is the frozen v3 plan itself and doesn't
 change to reflect progress -- this section is the only part that does.
 
-| Phase                    | State                                                                                 | Where                                                  |
-| ------------------------ | ------------------------------------------------------------------------------------- | ------------------------------------------------------ |
-| 1 -- Scaffold            | done                                                                                  | [PR #1](https://github.com/Vilos92/comment-fmt/pull/1) |
-| 2 -- Core + JS lexer     | done                                                                                  | [PR #2](https://github.com/Vilos92/comment-fmt/pull/2) |
-| 3 -- CLI                 | done                                                                                  | [PR #3](https://github.com/Vilos92/comment-fmt/pull/3) |
-| 4 -- Differential corpus | done                                                                                  | [PR #4](https://github.com/Vilos92/comment-fmt/pull/4) |
-| 5 -- Block reshape       | done                                                                                  | [PR #5](https://github.com/Vilos92/comment-fmt/pull/5) |
-| 6 -- CSS + HTML lexers   | CSS in this PR, HTML not started                                                      | [PR #6](https://github.com/Vilos92/comment-fmt/pull/6) |
-| 7 -- Rollout and tuning  | proof-of-concept pass in progress -- `vilos92.com` first, then Phase 8, then the rest | see status notes below                                 |
-| 8 -- Astro               | moved up, scheduled before `greglinscheg.com`'s rollout pass (was unscheduled)        | see status notes below                                 |
+| Phase                    | State                                                                             | Where                                                                                                          |
+| ------------------------ | --------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| 1 -- Scaffold            | done                                                                              | [PR #1](https://github.com/Vilos92/comment-fmt/pull/1)                                                         |
+| 2 -- Core + JS lexer     | done                                                                              | [PR #2](https://github.com/Vilos92/comment-fmt/pull/2)                                                         |
+| 3 -- CLI                 | done                                                                              | [PR #3](https://github.com/Vilos92/comment-fmt/pull/3)                                                         |
+| 4 -- Differential corpus | done                                                                              | [PR #4](https://github.com/Vilos92/comment-fmt/pull/4)                                                         |
+| 5 -- Block reshape       | done                                                                              | [PR #5](https://github.com/Vilos92/comment-fmt/pull/5)                                                         |
+| 6 -- CSS + HTML lexers   | done (CSS in PR #6, HTML in PR #8)                                                | [PR #6](https://github.com/Vilos92/comment-fmt/pull/6), [PR #8](https://github.com/Vilos92/comment-fmt/pull/8) |
+| 7 -- Rollout and tuning  | proof-of-concept pass in progress -- `vilos92.com` done, `greglinscheid.com` next | see status notes below                                                                                         |
+| 8 -- Astro               | done, moved up ahead of `greglinscheid.com`'s rollout pass (was unscheduled)      | [PR #8](https://github.com/Vilos92/comment-fmt/pull/8)                                                         |
 
 **PR #2** finished §12 Phase 2's scope: `core/{constants,measure,predicates,blocks,wrap}.ts` and
 `lang/js.ts`, plus `src/index.ts`'s `format()` wired to the real engine in place of the Phase 1
@@ -143,20 +143,84 @@ merged, and the actual sequencing becomes: clean up and publish `comment-fmt` as
 citations" instruction), _then_ wire the real hook into each repo as a proper dependency, per §11's
 original hook-wiring guidance.
 
-**Phase 8 (Astro) is moving up ahead of `greglinscheg.com`'s rollout pass, superseding §12's original
-phasing below.** §12 held Astro entirely unscheduled, deferred until after Phase 7 had run so
-`greglinscheg.com`'s own rollout could surface whether `.astro` comments were common enough there to be
-worth it. That reasoning doesn't hold once §11's rollout order is taken literally: `greglinscheg.com` is
-the second repo in blast-radius order, and it's Astro-based. Running its POC pass with no `astro.ts` lexer
-wouldn't surface "not common enough to bother with" -- it would surface nothing at all, since `.astro`
-isn't in `LANG_BY_EXTENSION` anywhere and the file is never even discovered, let alone reflowed. That's a
-POC proving the tool against an incomplete slice of the one repo picked specifically to exercise the
-gap. So the revised order is: `vilos92.com`'s POC pass first (not Astro-based, no dependency on any of this),
-then finish Phase 6's still-outstanding HTML half (the `<script>`/`<style>` delegation design this file
-already flags as needing direct user input, not a unilateral call), then build `lang/astro.ts` per §4's
-architecture note on top of it (frontmatter delegates to `js.ts`, template delegates to `html.ts`, both
-with position-offsetting) -- `astro.ts` can't exist before `html.ts` does, since it delegates directly to
-it -- _then_ continue the rollout with `greglinscheg.com` onward.
+**Phase 8 (Astro) moved up ahead of `greglinscheid.com`'s rollout pass, superseding §12's original
+phasing below,** and both it and Phase 6's outstanding HTML half landed together in this same PR (after
+`vilos92.com`'s POC pass, per the reorder's own reasoning: `greglinscheid.com` is Astro-based and second
+in blast-radius order, so running its POC with no `astro.ts` lexer would've surfaced nothing at all, not
+"not common enough to bother with" -- `.astro` wasn't in `LANG_BY_EXTENSION` anywhere).
+
+`lang/html.ts` locates `<!-- -->` comments, skips quoted attribute values (so
+`<a href="<!-- oops">Link</a>` doesn't corrupt everything up to the next real `-->`), never reports one
+inside `<textarea>`/`<title>` (RCDATA elements per the WHATWG spec -- distinct from `<script>`/`<style>`'s
+own raw-text category, but the same practical consequence: never real comment nodes) or `<pre>` (a real
+comment, but never reflowed -- not because its whitespace is rendering-significant, a comment is never
+rendered at all, but to preserve `<pre>`'s own strong "keep this exactly as authored" signal, the same
+conservative bias this project already applies elsewhere), and delegates `<script>`/`<style>` bodies to
+`js.ts`/`css.ts` with offsets remapped back onto the real document, mirroring the `<script>`/`<style>` note
+in §4. Both WHATWG-defined degenerate short forms (`<!-->`, `<!--->`) are handled explicitly
+-- getting either wrong would search onward for the _next_ real `-->` and swallow everything up to it as
+one comment, a genuine corruption bug caught by construction, not by testing after the fact. `src/index.ts`
+gained a per-language `FreshBlockStyle` (JS/CSS keep the JSDoc `*` convention when a comment expands from
+single-line; HTML has none, so it gets plain indentation with the closer flush at the opener's own column)
+and `Comment` gained an optional `lang` field so a comment delegated from `<script>`/`<style>` keeps its
+own language's style even inside an `html`-mode `format()` call -- confirmed as a needed fix, not
+theoretical: an early version lost `<style>`'s `*` convention entirely because `reflowBlockComment` only
+ever consulted the top-level `format()` call's own `lang`.
+
+`lang/astro.ts` splits a file at its `---` frontmatter fence (files may have none at all), delegating the
+frontmatter to `js.ts` and the template to `html.ts`, both using the same offset-remapping approach. A
+known, disclosed gap: a bare `{expression}` slot in the template -- including the common
+`{/* comment */}` convention for a template-only comment -- isn't treated as a nested-JS region. Attempting
+it (per this file's own "find out by attempting it" framing) surfaced that an attribute value can _be_ a
+bare `{expr}` with no quotes at all, so finding its true end needs real brace-depth tracking that skips
+strings and nested template literals correctly, not a shallow brace count -- a real undertaking of its own,
+better justified by real signal than guessed at. Checked against `greglinscheid.com` itself (18 real
+`.astro` files): zero contain `{/* */}` at all, and zero would change under `--check` regardless (every
+comment already fits) -- so the gap costs nothing today, and building it speculatively wouldn't have been.
+
+16 HTML fixture pairs and 6 Astro fixture pairs live under `test/fixtures/{html,astro}/`, covering §14.10's
+adversarial case list plus the delegation/frontmatter/known-gap cases above. The differential corpus scan
+(106,751 files: the 15-repo corpus plus `node_modules`, now genuinely exercising HTML for the first time)
+found zero code-invariance violations, and a separate read-only pass directly against `greglinscheid.com`
+(16,346 files including its real `.astro` content) found zero as well.
+
+**A real, general bug surfaced during Phase 7's `scriptlancer` self-review, fixed here too:**
+`core/wrap.ts`'s `fillBlock` pooled a block's lines with `lines.join(' ').trim()` before greedy-filling,
+which silently discarded a list item's own leading indentation (its marker's whitespace, e.g. the `  ` in
+`*   1. text`) and had no concept of a hanging indent for a wrapped item's continuation lines. A two-item
+list where only item 1 overflowed came out with item 1's indent stripped while item 2 (untouched) kept
+its original indent -- a visibly misaligned list caused by a single line's overflow, not a hypothetical:
+confirmed live against `packages/shared/src/pilot/corridorAvoidance.ts` in `scriptlancer` during that
+repo's own POC self-review. Fixed with `fillListItemBlock`: the marker (leading whitespace + bullet/
+number + trailing spaces, exactly as authored) is spliced off before pooling words, wrapped at a budget
+narrowed by the marker's own width, then re-attached -- verbatim on line 1, as a same-width hanging
+indent on every continuation line. This lives in `core/`, so it's language-agnostic and applies to every
+lexer (JS/CSS/HTML/Astro) uniformly, not just JS. Two regression fixtures added
+(`regression-numbered-list-item-preserves-indent-and-hangs`,
+`regression-bulleted-list-item-hangs-under-marker`); the full corpus scan re-run afterward still found
+zero code-invariance violations and the same 5,027-file changed count as before the fix (expected -- this
+changes _how_ overflowing list items wrap, not _which_ files have anything to wrap).
+
+**A second, separate real bug surfaced in the same `scriptlancer` self-review, also fixed here:**
+`reflowLineComment` indented every continuation line of a wrapped `//` comment by `comment.indent`,
+which for a trailing comment (`const X = 1; // ...`) measures the column `//` itself starts at --
+including the code before it -- producing a continuation line column-aligned under the original
+`//`. That alignment doesn't survive a real code formatter: confirmed directly against `oxfmt`
+(`vp check` failing on exactly the two files using this pattern, `packages/shared/src/protocol/
+{codec,matchPhase}.ts`), which treats a comment-only line as belonging to its enclosing block and
+silently re-indents it to the block's own level on every run, regardless of hook ordering, since an
+editor's own format-on-save runs independently of any git hook. Fixed with a new `computeLineIndent`
+helper (leading whitespace of the comment's own physical line, stopping at the first non-whitespace
+character) used for continuation-line indentation specifically, instead of `comment.indent`; the two
+already coincide for an own-line comment, so this only changes the trailing case. Confirmed the fix
+converges with `oxfmt`: `vp check` in `scriptlancer` passes clean afterward. Three existing fixtures
+that had asserted the old column-aligned output were updated, and a new
+`regression-trailing-comment-wrap-matches-block-indent` fixture covers the case that surfaced this
+(a nested trailing comment inside a function body, confirming continuation lines match the block's
+own indent, not just column 0). Also fixed: this section's own stale "comment-fmt runs before the
+formatter" leftover a few paragraphs below, which directly contradicted this section's already-
+corrected "runs last" guidance above it and turned out, once actually tested, to describe the
+ordering that causes this exact bug.
 
 **Once Phase 7 lands, delete this file** -- and before deleting it, sweep every `(plan §N)` citation out
 of the codebase's comments first. It's a handoff document for building the tool, not permanent project
@@ -754,9 +818,17 @@ pre-commit:
 "lint": "vp lint && comment-fmt --check ."      // the three vp repos
 ```
 
-**Ordering matters:** `comment-fmt` runs _before_ the formatter, so Biome/oxfmt gets the last word and
-can't be surprised by our output. Verify on a real file that the two converge — if `biome check --write`
-reflows what we just wrote, or vice versa, you have a fight and must narrow our scope.
+**This CI ordering doesn't contradict "`comment-fmt` runs last" above.** `--check` only validates,
+never rewrites, so there's no "who goes first" question here the way there is for the `--write` hook
+step: by the time CI runs, the pre-commit hook has already converged the file (`comment-fmt` had the
+last word there), and `biome ci`/`vp lint` running before `comment-fmt --check` in these scripts just
+means the language formatter's own check fails fast first, which is arbitrary ordering for two
+independent validations, not a re-derivation of formatting. (An earlier draft of this section
+asserted the opposite -- "comment-fmt runs before the formatter" -- for the pre-commit hook itself.
+That was the stale, uncorrected version this section's own top paragraph already flags as wrong;
+confirmed wrong in practice too, not just in theory, the first time a real rollout repo actually hit
+this: `comment-fmt`-then-`oxfmt` produced a wrapped trailing comment whose continuation line `oxfmt`
+promptly re-indented right back out from under it, on every single run.)
 
 ### README
 

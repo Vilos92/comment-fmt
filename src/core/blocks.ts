@@ -25,7 +25,14 @@ export type Block = {
  * Constants.
  */
 
-const LIST_MARKER = /^\s*([-*+]|\d+[.)])\s/;
+/**
+ * Matches a list-item marker's full leading run: indentation, the bullet/number itself, and every
+ * space that follows it. `\s+` (not a single `\s`) so `wrap.ts` can also use this to measure the
+ * marker's exact rendered width for a hanging indent when a wrapped list item's continuation lines
+ * need to line up under its text rather than under the block's own base prefix. Widening from a
+ * single trailing space to `\s+` doesn't change this file's own `.test()` usage below.
+ */
+export const LIST_MARKER = /^\s*(?:[-*+]|\d+[.)])\s+/;
 
 /*
  * Entry.
