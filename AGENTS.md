@@ -19,12 +19,6 @@ Docs are local at `node_modules/vite-plus/docs` or online at https://viteplus.de
 
 Living conventions for this repo. Ask whether new habits belong here vs `README.md`.
 
-`PLAN.md` is the architecture and phasing source of truth -- code comments citing "plan §N" mean that
-document. Check it before proposing a structural change or re-deriving something it already settled.
-**Once the tool is operational (`PLAN.md`'s own Status section tracks this), delete it** and sweep every
-`plan §N` citation out of the codebase's comments first, rewriting each into the rationale it was standing
-in for. It's a handoff document for building the tool, not permanent project documentation.
-
 ## Toolchain
 
 **Bun-first** for installs and `package.json` scripts (`bun install`, `bun run …`, `bunx …`). Day-to-day tooling is **`vp`** per the Vite+ section above. Prefer the Bun (or `vp`) equivalent when upstream docs show `npm` / `pnpm` / `npx`.
@@ -97,14 +91,15 @@ Do **not** collapse these to single-line `/* Types. */`. Skip markers entirely o
 
 Non-trivial diff, or before commit: `vp check` then `vp test`. The CI jobs map onto local commands 1:1:
 
-| CI job      | Local command                                                                    |
-| ----------- | -------------------------------------------------------------------------------- |
-| `fmt`       | `vp run fmt:check`                                                               |
-| `lint`      | `vp run lint`                                                                    |
-| `typecheck` | `vp run typecheck`                                                               |
-| `check`     | `vp run check`                                                                   |
-| `test`      | `vp run test` — currently fails upstream regardless of local changes, see README |
-| `build`     | `vp run build`                                                                   |
+| CI job        | Local command                                                                    |
+| ------------- | -------------------------------------------------------------------------------- |
+| `fmt`         | `vp run fmt:check`                                                               |
+| `lint`        | `vp run lint`                                                                    |
+| `typecheck`   | `vp run typecheck`                                                               |
+| `check`       | `vp run check`                                                                   |
+| `comment-fmt` | `bun src/cli/index.ts --check` — dogfoods this repo's own tool, from source      |
+| `test`        | `vp run test` — currently fails upstream regardless of local changes, see README |
+| `build`       | `vp run build`                                                                   |
 
 ## Keeping this file useful
 

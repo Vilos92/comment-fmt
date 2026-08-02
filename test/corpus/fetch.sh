@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# Single source of truth for the differential-corpus repo list (plan §9.3, §14.11), so repeated
-# local runs always scan the same corpus. Deliberately local-only: this is not wired into any CI
-# job. Shallow-clones each repo into ./corpus/ (fast, small, and git-ignored: this is ephemeral
-# scratch data, never committed).
+# Single source of truth for the differential-corpus repo list, so repeated local runs always scan
+# the same corpus. Deliberately local-only: this is not wired into any CI job. Shallow-clones each
+# repo into ./corpus/ (fast, small, and git-ignored: this is ephemeral scratch data, never
+# committed).
 #
 # Usage:
 #   ./test/corpus/fetch.sh
@@ -11,11 +11,10 @@ set -euo pipefail
 
 cd "$(dirname "$0")/../.."
 
-# 15 repos, not the plan's suggested 20-30 (plan §9.3, §14.11): a practical scope reduction for
-# clone time/disk, not an oversight. The five consumer repos (scriptlancer, greglinscheid.com,
-# vilos92.com, gdex, grynthia.cat) are deliberately absent here too: those are separate private/
-# personal repos, so scanning them is a manual step outside this script, pointed directly at
-# wherever they already live on disk.
+# A deliberately modest list: clone time/disk trades off against corpus diversity. This tool's own
+# real-world consumer repos are deliberately absent here too: those are separate private/personal
+# repos, so scanning them is a manual step outside this script, pointed directly at wherever they
+# already live on disk.
 REPOS=(
   microsoft/TypeScript
   vuejs/core

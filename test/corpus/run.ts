@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
-// Differential corpus harness (plan §9.3). Runs `format()` over large volumes of *real* code
-// rather than synthetic fixtures, and reports every file the tool wants to change. Findings here
+// Differential corpus harness. Runs `format()` over large volumes of *real* code rather than
+// synthetic fixtures, and reports every file the tool wants to change. Findings here
 // aren't all equally severe. A code-invariance violation (property 9.1.4: the non-comment token
 // stream must be byte-identical before and after) means the lexer mistook code for a comment and
 // corrupted a file, so even one anywhere in a real corpus is a stop-the-world bug. A file that
@@ -48,11 +48,11 @@ type SkippedLargeFile = {
  * Constants.
  */
 
-// `node_modules` is deliberately NOT in this set (plan §9.3: scanning it is the point, it's
-// "enormous, free, and stylistically diverse"). Only version control internals are skipped.
+// `node_modules` is deliberately NOT in this set: scanning it is the point, it's enormous, free,
+// and stylistically diverse. Only version control internals are skipped.
 const DIRECTORIES_TO_SKIP: ReadonlySet<string> = new Set(['.git']);
 
-/** Which `Lang` (plan §4) each formattable extension maps to. */
+/** Which `Lang` each formattable extension maps to. */
 const LANG_BY_EXTENSION: Readonly<Record<string, Lang>> = {
   '.js': 'js',
   '.jsx': 'js',
@@ -118,8 +118,8 @@ function main(): void {
   }
 
   printReport(totals, invarianceViolations, errors, skippedLargeFiles);
-  // A code-invariance violation is the most severe finding this harness treats as fatal (plan
-  // §9.3). A file that errored partway through (unreadable, or a genuine crash in `format()`
+  // A code-invariance violation is the most severe finding this harness treats as fatal. A file
+  // that errored partway through (unreadable, or a genuine crash in `format()`
   // itself) also fails the run: reporting a clean pass over a scan that never actually finished
   // reading every file would be misleading, exactly the "run in a misleading state" this repo's
   // fail-fast convention warns against. An ordinary changed-file count is a net, not a gate, so it
@@ -247,8 +247,8 @@ function printReport(
   errors: readonly FileError[],
   skippedLargeFiles: readonly SkippedLargeFile[]
 ): void {
-  // Code-invariance violations are surfaced first and loudest (plan §9.3: "worth stopping the
-  // world for"), never buried alongside routine "file would change" noise.
+  // Code-invariance violations are surfaced first and loudest -- worth stopping the world for --
+  // never buried alongside routine "file would change" noise.
   if (invarianceViolations.length > 0) {
     process.stdout.write('\n');
     process.stdout.write('='.repeat(70) + '\n');
