@@ -225,16 +225,25 @@ function fitsWithinLimit(raw: string, indent: number, maxLength: number): boolea
  * continuation line (a line comment has no per-line decoration of its own to preserve, unlike a
  * block comment's ` * `).
  *
- * Continuation lines deliberately use `computeLineIndent`, not `comment.indent`, for their leading
- * whitespace. For an own-line comment the two are identical (nothing but whitespace precedes it
- * either way). For a trailing comment (`const X = 1; // ...`) they diverge: `comment.indent`
- * measures the column `//` starts at, which includes the code before it, while
- * `computeLineIndent` measures only the line's real leading whitespace. Aligning a wrapped
- * trailing comment's continuation under the original `//`'s column looked reasonable but doesn't
- * survive contact with a real code formatter: confirmed directly against `oxfmt`, which treats a
- * comment-only line as belonging to its enclosing block and re-indents it to the block's own
- * level, silently stripping any column alignment on every run. `computeLineIndent` already matches
- * what the formatter converges to, so nothing fights on the next pass.
+ * A trailing comment (`const X = 1; // ...`) that would need more than one line is left as a
+ * single over-width line instead, never wrapped. Its first physical line mixes code and comment,
+ * so a `//`-only continuation line is structurally ambiguous with whatever statement follows it at
+ * the same indent, there's nothing on the page distinguishing "this continues the comment above"
+ * from "this is a new leading comment for what's below". That ambiguity gets worse, not better,
+ * across a run of sibling declarations each with their own trailing comment: wrapping only the
+ * ones that happen to overflow makes an otherwise-uniform block of lines diverge in shape for a
+ * reason invisible to the reader (that one comment's word count), while an untouched overflow
+ * stays visually consistent with its neighbors. An own-line comment has no such ambiguity, every
+ * line is `//`-only, so it still wraps normally.
+ *
+ * Continuation lines (own-line comments only, see above) deliberately use `computeLineIndent`, not
+ * `comment.indent`, for their leading whitespace. For an own-line comment the two are identical
+ * (nothing but whitespace precedes it either way). Aligning a wrapped comment's continuation under
+ * the original `//`'s column looked reasonable but doesn't survive contact with a real code
+ * formatter: confirmed directly against `oxfmt`, which treats a comment-only line as belonging to
+ * its enclosing block and re-indents it to the block's own level, silently stripping any column
+ * alignment on every run. `computeLineIndent` already matches what the formatter converges to, so
+ * nothing fights on the next pass.
  */
 function reflowLineComment(source: string, comment: Comment, raw: string, options: FormatOptions): string {
   const content = raw.slice(comment.open.length).replace(/^[ \t]+/, '');
@@ -255,6 +264,9 @@ function reflowLineComment(source: string, comment: Comment, raw: string, option
     // single space is what keeps *that* case within `maxLength` in the first place: an original
     // with extra internal spacing could otherwise measure over the limit by the outer check while
     // `wrap()`'s own budget (which assumes exactly one space) reads it as already fitting.
+    return raw;
+  }
+  if (!comment.ownLine && wrapped.length > 1) {
     return raw;
   }
   const indentStr = ' '.repeat(computeLineIndent(source, comment.start));
