@@ -25,11 +25,10 @@ const FENCE = '---';
 
 /**
  * Locates every comment in an `.astro` file: frontmatter (TS between `---` fences, delegated to
- * `js.ts`) followed by HTML-like template markup (delegated to `html.ts`), per plan §4's
- * architecture note. Both delegations remap offsets from the extracted region back onto the real
- * document and re-derive via the shared `buildComment`/`html.ts`'s own region-scanning, the same
- * "position-offsetting, not a simple call-through" approach `html.ts` already uses for
- * `<script>`/`<style>`.
+ * `js.ts`) followed by HTML-like template markup (delegated to `html.ts`). Both delegations remap
+ * offsets from the extracted region back onto the real document and re-derive via the shared
+ * `buildComment`/`html.ts`'s own region-scanning, the same "position-offsetting, not a simple
+ * call-through" approach `html.ts` already uses for `<script>`/`<style>`.
  *
  * Known, deliberate gap: a bare `{expression}` slot in the template (Astro/JSX's own syntax for
  * embedding JS, including the common `{/* comment *​/}` convention for a template-only comment) is
@@ -37,14 +36,12 @@ const FENCE = '---';
  * so, since plain HTML has no such syntax -- and giving `astro.ts` its own `{}`-aware scanner is a
  * real undertaking of its own (an attribute value can *be* a bare `{expr}`, with no quotes at all,
  * so finding its true end needs real brace-depth tracking that skips over strings and nested
- * template literals correctly, not a shallow brace count). Per plan §4's own framing ("whether this
- * is cheap or a can of worms is exactly the kind of thing to find out by actually attempting it"):
- * attempting it surfaced that the `{}`-in-attribute-value case makes this deep enough to warrant
- * its own pass, informed by whether real `.astro` files actually lean on `{/* *​/}` comments enough
- * to be worth it -- exactly the kind of thing plan §9.3's corpus-scan-first philosophy argues for
- * over guessing. Until then, a comment inside a `{}` slot is silently left alone: no corruption
- * risk (nothing inside a slot is ever misidentified as a comment delimiter it isn't), just a
- * disclosed coverage gap, not a silent one.
+ * template literals correctly, not a shallow brace count). Attempting a `{}`-aware scanner surfaced
+ * that the `{}`-in-attribute-value case makes this deep enough to warrant its own pass, informed by
+ * whether real `.astro` files actually lean on `{/* *​/}` comments enough to be worth it -- worth
+ * measuring against real usage before guessing. Until then, a comment inside a `{}` slot is
+ * silently left alone: no corruption risk (nothing inside a slot is ever misidentified as a comment
+ * delimiter it isn't), just a disclosed coverage gap, not a silent one.
  */
 export function findComments(source: string): Comment[] {
   const frontmatter = findFrontmatter(source);
@@ -55,7 +52,7 @@ export function findComments(source: string): Comment[] {
   const frontmatterBody = source.slice(frontmatter.bodyStart, frontmatter.bodyEnd);
   const frontmatterComments = findCommentsJs(frontmatterBody).map(comment => ({
     // Overrides `format()`'s own `options.lang` (`'astro'`) for this one comment: it's genuinely
-    // TS, so it should expand using JS/TS's `* ` star convention (plan §4).
+    // TS, so it should expand using JS/TS's `* ` star convention.
     ...buildComment(
       comment.kind,
       source,
@@ -69,7 +66,7 @@ export function findComments(source: string): Comment[] {
     comment => ({
       ...comment,
       // `?? 'html'` only, not an unconditional override: `html.ts`'s own `<script>`/`<style>`
-      // delegation already tags a nested JS/CSS comment with the right `lang` (plan §4), and
+      // delegation already tags a nested JS/CSS comment with the right `lang`, and
       // clobbering that back to `'html'` here would lose the star convention for a `<style>` block
       // sitting inside this template -- confirmed as a real bug, not a hypothetical one, by the
       // `template-script-and-style-still-delegate` fixture losing its `* ` prefix during review.

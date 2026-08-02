@@ -16,8 +16,8 @@ export type {Lang} from './lang/types.ts';
 
 export type FormatOptions = WrapOptions & {
   /**
-   * Which lexer to find comments with (plan §4). Defaults to `'js'` so every existing caller
-   * (the JS/TS/JSX/TSX-only callers this library shipped with before CSS support existed) keeps
+   * Which lexer to find comments with. Defaults to `'js'` so every existing caller (the
+   * JS/TS/JSX/TSX-only callers this library shipped with before CSS support existed) keeps
    * working unchanged.
    */
   readonly lang?: Lang;
@@ -68,19 +68,19 @@ const FRESH_BLOCK_STYLE_BY_LANG: Readonly<Record<Lang, FreshBlockStyle>> = {
 };
 
 /**
- * File-level escape hatch (plan §8.4): honored only within a file's first `IGNORE_FILE_LINE_WINDOW`
- * physical lines, so a stray mention deep in a long file can't silently opt the whole file out.
- * `\b` after the literal keeps a hypothetical `comment-fmt-ignore-fileX` from matching.
+ * File-level escape hatch: honored only within a file's first `IGNORE_FILE_LINE_WINDOW` physical
+ * lines, so a stray mention deep in a long file can't silently opt the whole file out. `\b` after
+ * the literal keeps a hypothetical `comment-fmt-ignore-fileX` from matching.
  */
 const IGNORE_FILE_MARKER = /comment-fmt-ignore-file\b/;
 
 const IGNORE_FILE_LINE_WINDOW = 5;
 
 /**
- * Per-comment escape hatch (plan §8.4): matches `comment-fmt-ignore` wherever it appears in a
- * comment's body, for both the inline form (skip this comment) and as the whole content of a
- * preceding standalone comment (skip the next one). Excludes `comment-fmt-ignore-file` so that
- * marker, found outside its line window, doesn't also register as this one.
+ * Per-comment escape hatch: matches `comment-fmt-ignore` wherever it appears in a comment's body,
+ * for both the inline form (skip this comment) and as the whole content of a preceding standalone
+ * comment (skip the next one). Excludes `comment-fmt-ignore-file` so that marker, found outside
+ * its line window, doesn't also register as this one.
  */
 const IGNORE_MARKER = /comment-fmt-ignore(?!-file)\b/;
 
@@ -97,14 +97,14 @@ const IGNORE_MARKER_WHOLE_COMMENT = /^comment-fmt-ignore(\s*(--|:)\s*\S.*)?$/;
 /**
  * Reflows every comment in `source` to fit within `options.maxLength` columns, without touching
  * anything else. Non-comment code is guaranteed byte-for-byte identical (see `test/props`,
- * property 9.1.4). `options.lang` picks the lexer (plan §4); every reflow decision after that
- * point is entirely language-agnostic, since every lexer returns the same `Comment` shape.
+ * property 9.1.4). `options.lang` picks the lexer; every reflow decision after that point is
+ * entirely language-agnostic, since every lexer returns the same `Comment` shape.
  *
  * A comment whose every physical line already fits is returned completely untouched, not just
  * "unchanged content re-serialized the same way." This function slices the original source
  * around comments it doesn't need to touch, rather than reconstructing them, so there's no path
  * by which reflow logic could introduce a whitespace difference in already-fitting content. The
- * same applies, unconditionally, to any comment covered by the plan §8.4 escape hatch below.
+ * same applies, unconditionally, to any comment covered by the escape hatch below.
  */
 export function format(source: string, options: FormatOptions = {}): string {
   const comments = FIND_COMMENTS_BY_LANG[options.lang ?? 'js'](source);
@@ -133,7 +133,7 @@ export function format(source: string, options: FormatOptions = {}): string {
  */
 
 /**
- * `true` if a `comment-fmt-ignore-file` marker (plan §8.4) itself sits within the file's first
+ * `true` if a `comment-fmt-ignore-file` marker itself sits within the file's first
  * `IGNORE_FILE_LINE_WINDOW` lines. Checked once, up front, so a matching file short-circuits to a
  * straight return rather than being walked comment by comment for no reason.
  *
@@ -159,8 +159,8 @@ function checkHasFileIgnore(source: string, comments: readonly Comment[]): boole
 }
 
 /**
- * `true` if `comments[index]` is covered by the per-comment escape hatch (plan §8.4): either the
- * marker appears inline in its own body, or the comment immediately before it is a standalone
+ * `true` if `comments[index]` is covered by the per-comment escape hatch: either the marker
+ * appears inline in its own body, or the comment immediately before it is a standalone
  * `comment-fmt-ignore` marker with nothing but a single line break between the two. The adjacency
  * check is deliberately strict (no blank line permitted) to match how directive comments like
  * `eslint-disable-next-line` are conventionally read: applying to the very next line, not "soon".
@@ -199,8 +199,8 @@ function reflowComment(source: string, comment: Comment, options: FormatOptions)
   const raw = source.slice(comment.start, comment.end);
   const maxLength = options.maxLength ?? DEFAULT_MAX_LENGTH;
 
-  // Block shape (plan §1) is a one-way ratchet driven only by overflow, the same as width
-  // already is: a comment expands from single-line to the starred multi-line form when it
+  // Block shape is a one-way ratchet driven only by overflow, the same as width already is: a
+  // comment expands from single-line to the starred multi-line form when it
   // overflows, but a multi-line comment that already fits is never collapsed back down, no
   // matter how short its content is. That makes "every physical line already fits" the whole
   // answer for both comment kinds, so both share this one short-circuit. Whatever shape a human
@@ -245,9 +245,10 @@ function reflowLineComment(source: string, comment: Comment, raw: string, option
     wrapped[0] === content &&
     checkIsProtectedLine(content, options.extraDirectives)
   ) {
-    // `wrap()` left this untouched specifically because it's protected (plan §8.1/§8.3), not
-    // merely because it already fits its own budget. Reconstructing below hardcodes exactly one
-    // space after `//`, which would silently collapse an atypical original spacing (e.g.
+    // `wrap()` left this untouched specifically because it's protected (a directive or table-like
+    // content, per `checkIsProtectedLine` below), not merely because it already fits its own
+    // budget. Reconstructing below hardcodes exactly one space after `//`, which would silently
+    // collapse an atypical original spacing (e.g.
     // `//  eslint-disable ...`, two spaces) even though a protected directive must be preserved
     // byte-for-byte. Return the untouched original instead of risking that. Content that merely
     // fits (not protected) still goes through the normal reconstruction below, whose hardcoded
@@ -267,16 +268,16 @@ function reflowLineComment(source: string, comment: Comment, raw: string, option
 }
 
 /**
- * Reflows a block comment (`/*`- or `/**`-opened). Block shape (plan §1) is a one-way ratchet:
- * this function is only ever reached when something overflows (see the shared short-circuit in
- * `reflowComment`), so there is no "should this collapse" decision to make here at all, only "does
- * this need to expand or rewrap." A comment that was already single-line expands to the multi-line
- * form (starred, for JS/CSS; plain-indented, for HTML -- see `FreshBlockStyle`); one that was
- * already multi-line stays multi-line and gets its content rewrapped in place, never collapsed
- * back down even if the rewrapped content would technically fit on one line. The opening and
- * closing lines never carry content, per plan §1: every content line, including what would once
- * have been "line 0" right after `open`, gets its own line with `continuationPrefix` applied,
- * exactly like every other content line. Handles both an already multi-line comment (reusing its
+ * Reflows a block comment (`/*`- or `/**`-opened). Block shape is a one-way ratchet: this function
+ * is only ever reached when something overflows (see the shared short-circuit in `reflowComment`),
+ * so there is no "should this collapse" decision to make here at all, only "does this need to
+ * expand or rewrap." A comment that was already single-line expands to the multi-line form
+ * (starred, for JS/CSS; plain-indented, for HTML -- see `FreshBlockStyle`); one that was already
+ * multi-line stays multi-line and gets its content rewrapped in place, never collapsed back down
+ * even if the rewrapped content would technically fit on one line. The opening and closing lines
+ * never carry content: every content line, including what would once have been "line 0" right
+ * after `open`, gets its own line with `continuationPrefix` applied, exactly like every other
+ * content line. Handles both an already multi-line comment (reusing its
  * detected `linePrefix`) and one expanding from single-line for the first time (synthesizing one
  * per `FRESH_BLOCK_STYLE_BY_LANG`), and both a properly terminated comment and an unterminated one
  * (malformed/truncated source, which has no closing delimiter to reconstruct).
@@ -301,8 +302,8 @@ function reflowBlockComment(comment: Comment, raw: string, options: FormatOption
   // empty for HTML, which has no per-line convention to detect). One that's only overflowing now,
   // and must expand from single-line, has no such line to detect a convention from -- synthesize
   // one per the language's `FreshBlockStyle` instead. `comment.lang` overrides `options.lang` for a
-  // comment delegated from a `<script>`/`<style>` body (plan §4): that comment is genuinely JS or
-  // CSS, not HTML, and should use its own language's style even inside an `html`-mode `format()` call.
+  // comment delegated from a `<script>`/`<style>` body: that comment is genuinely JS or CSS, not
+  // HTML, and should use its own language's style even inside an `html`-mode `format()` call.
   const style = FRESH_BLOCK_STYLE_BY_LANG[comment.lang ?? options.lang ?? 'js'];
   const freshPrefix = `${' '.repeat(comment.indent + style.continuationIndent)}${style.prefix}`;
   const continuationPrefix = wasSingleLine ? freshPrefix : comment.linePrefix || freshPrefix;
@@ -336,10 +337,10 @@ function reflowBlockComment(comment: Comment, raw: string, options: FormatOption
     wrapped[0] === contentLines[0] &&
     checkIsProtectedLine(contentLines[0] ?? '', extraDirectives)
   ) {
-    // `wrap()` left this untouched specifically because it's protected (plan §8.1/§8.3), not
-    // merely because it already fits its own budget. Reconstructing below would lose the
-    // comment's original leading whitespace even though a protected directive must be preserved
-    // byte-for-byte. Return the untouched original instead.
+    // `wrap()` left this untouched specifically because it's protected (a directive or table-like
+    // content, per `checkIsProtectedLine`), not merely because it already fits its own budget.
+    // Reconstructing below would lose the comment's original leading whitespace even though a
+    // protected directive must be preserved byte-for-byte. Return the untouched original instead.
     return raw;
   }
 
@@ -358,10 +359,10 @@ function reflowBlockComment(comment: Comment, raw: string, options: FormatOption
  * followed by `content` starting with `/` is exactly the shape a comment's own body can contain
  * without incident (e.g. an embedded `// example` line inside a larger explanatory comment, or a
  * `/* nested *​/`-looking mention), right up until this reconstruction glues the two together with
- * nothing in between. This was a real, previously unreachable bug: it only started firing once
- * plan §12 Phase 5 began running every block comment through reconstruction, including ones that
- * already fit and were never touched before, confirmed by the plan §9.3 corpus scan finding it in
- * real `node_modules` content.
+ * nothing in between. This was a real, previously unreachable bug: it only started firing once the
+ * one-way ratchet began running every overflowing block comment through reconstruction, including
+ * ones that already fit and were never touched before, confirmed by `test/corpus/run.ts` finding
+ * it in real `node_modules` content.
  */
 function joinPrefixAndContent(prefix: string, content: string): string {
   const needsSeparatingSpace = prefix.endsWith('*') && content.startsWith('/');
@@ -369,8 +370,8 @@ function joinPrefixAndContent(prefix: string, content: string): string {
 }
 
 /**
- * `true` for a single physical line `wrap()` itself would never modify: a directive (plan §8.1), a
- * blank line, an unterminated fence or `@example` marker, or table-like content (plan §8.3).
+ * `true` for a single physical line `wrap()` itself would never modify: a directive, a blank line,
+ * an unterminated fence or `@example` marker, or table-like content.
  * Distinguishes "`wrap()` left this untouched because it's protected, so the original must be
  * preserved byte-for-byte" from "`wrap()` left this untouched because it happens to already fit
  * its own budget," which is safe to reconstruct normally even though the text itself didn't

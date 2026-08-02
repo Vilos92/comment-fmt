@@ -18,10 +18,10 @@ export default defineConfig({
     // shell operator. `./scripts/staged-write.sh` runs this repo's own CLI from source (it
     // dogfoods itself before a published `comment-fmt` binary exists) and filters out
     // `test/fixtures/**` before doing so -- unlike `vp check --fix`, `comment-fmt --write` has no
-    // built-in exclusion for explicitly-named files (plan §6: `ignore` only filters discovery),
-    // and lint-staged feeds every staged path explicitly, so a staged fixture pair would otherwise
-    // get silently rewritten by the very tool it exists to test. Confirmed live, not theoretical:
-    // see the script's own header comment.
+    // built-in exclusion for explicitly-named files (`ignore` in `comment-fmt.json` only filters
+    // discovery), and lint-staged feeds every staged path explicitly, so a staged fixture pair
+    // would otherwise get silently rewritten by the very tool it exists to test. Confirmed live,
+    // not theoretical: see the script's own header comment.
     '*': ['vp check --fix', './scripts/staged-write.sh']
   },
   pack: {
@@ -46,9 +46,8 @@ export default defineConfig({
     // Fixture pairs are test data, not source. They're deliberately exotic/invalid in places
     // (that's the point), and must stay byte-exact for the snapshot harness. Reformatting one
     // would silently break what the fixture is asserting. `corpus/**` is ephemeral third-party
-    // source cloned by `test/corpus/fetch.sh` (plan §9.3) into a git-ignored directory: not ours
-    // to reformat, and walking 100,000+ real-world files on every `vp check` would also make it
-    // unusably slow.
+    // source cloned by `test/corpus/fetch.sh` into a git-ignored directory: not ours to reformat,
+    // and walking 100,000+ real-world files on every `vp check` would also make it unusably slow.
     ignorePatterns: ['dist/**', 'test/fixtures/**', 'corpus/**']
   },
   lint: {

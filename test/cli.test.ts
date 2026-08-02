@@ -1,6 +1,6 @@
-// CLI end-to-end tests (plan §12 Phase 3). Each test builds a scratch directory under
-// `os.tmpdir()`, runs `runCli` directly against it, and asserts both the returned exit code and
-// the resulting filesystem/stdout state. Never touches this repo's own files.
+// CLI end-to-end tests. Each test builds a scratch directory under `os.tmpdir()`, runs `runCli`
+// directly against it, and asserts both the returned exit code and the resulting filesystem/stdout
+// state. Never touches this repo's own files.
 import {mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
@@ -122,7 +122,7 @@ describe('cli', () => {
       expect(readFileSync(filePath, 'utf8')).toBe(original);
     });
 
-    test('reflows an overflowing .html comment in place (plan §12 Phase 6)', () => {
+    test('reflows an overflowing .html comment in place', () => {
       const filePath = join(scratchDir, 'page.html');
       const original = `${OVERFLOWING_COMMENT_LINE.replace('//', '<!--')} -->\n<body></body>\n`;
       writeFileSync(filePath, original);
@@ -141,7 +141,7 @@ describe('cli', () => {
       }
     });
 
-    test('reflows an overflowing .css comment in place (plan §12 Phase 6)', () => {
+    test('reflows an overflowing .css comment in place', () => {
       const filePath = join(scratchDir, 'styles.css');
       const original = `${OVERFLOWING_COMMENT_LINE.replace('//', '/*')} */\nbody { color: red; }\n`;
       writeFileSync(filePath, original);
@@ -224,8 +224,8 @@ describe('cli', () => {
 
       expect(exitCode).toBe(0);
       const output = stdout.join('');
-      // The directive overflows but `format()` leaves it untouched (§8.1), so it must not be
-      // reported as a "miss" in any group.
+      // The directive overflows but `format()` leaves it untouched (a protected directive line),
+      // so it must not be reported as a "miss" in any group.
       expect(output).toContain('prose: 0');
       expect(output).toContain('single-line: 0');
       expect(output).not.toContain(overflowingDirective);
@@ -313,7 +313,7 @@ describe('cli', () => {
 
       stdout = [];
       // Given explicitly as argv, the same vendor file is formatted anyway: `ignore` only
-      // filters discovery, per plan §6.
+      // filters discovery.
       const exitCodeExplicit = runCli(['--check', vendorPath], scratchDir);
       expect(exitCodeExplicit).toBe(1);
       expect(stdout.join('')).toContain('lib.js');

@@ -49,8 +49,8 @@ const DIRECTIVE_MARKERS: readonly string[] = [
   // HTML.
   '[if ', // Conditional comments: <!--[if IE]-->
   '#include', // SSI: <!--#include virtual="..." -->
-  // This tool's own escape hatch (plan §8.4). Self-protecting, so a long ignore directive is
-  // never itself wrapped into something that no longer matches the syntax it's documented with.
+  // This tool's own escape hatch. Self-protecting, so a long ignore directive is never itself
+  // wrapped into something that no longer matches the syntax it's documented with.
   'comment-fmt-ignore'
 ];
 
@@ -58,21 +58,21 @@ const DIRECTIVE_MARKERS: readonly string[] = [
 const GFM_DELIMITER_ROW = /^[\s|:-]+$/;
 
 /**
- * Exported so `--report-overwidth` (plan §9.3) can classify a comment into the same `has-pipe`
- * shape this module already detects, without re-deriving the character set.
+ * Exported so `--report-overwidth` can classify a comment into the same `has-pipe` shape this
+ * module already detects, without re-deriving the character set.
  */
 export const HAS_PIPE = /\|/;
 
 /**
- * Exported so `--report-overwidth` (plan §9.3) can classify a comment into the same
- * `has-box-drawing` shape this module already detects, without re-deriving the character set.
+ * Exported so `--report-overwidth` can classify a comment into the same `has-box-drawing` shape
+ * this module already detects, without re-deriving the character set.
  */
 export const BOX_DRAWING_CHARS = /[─│┌┐└┘├┤┬┴┼]/;
 
 /**
- * Exported for the same reason as `BOX_DRAWING_CHARS` above: `--report-overwidth` (plan §9.3)
- * classifies a comment into the same `has-box-drawing` shape this module already detects, without
- * re-deriving the pattern.
+ * Exported for the same reason as `BOX_DRAWING_CHARS` above: `--report-overwidth` classifies a
+ * comment into the same `has-box-drawing` shape this module already detects, without re-deriving
+ * the pattern.
  */
 export const ASCII_BOX_OR_TREE = /(\+-{2,}|\|--|├──|└──|`--)/;
 
@@ -85,9 +85,9 @@ const MIN_ALIGNED_LINES = 3;
  */
 
 /**
- * `true` if `line` starts (after trimming) with a known tool directive, or one from
- * `extraDirectives` (plan §6 config surface). Operates on a single line, since a directive inside
- * an otherwise-reflowable multi-line block should only protect that one line. See `blocks.ts`.
+ * `true` if `line` starts (after trimming) with a known tool directive, or one from the
+ * `extraDirectives` config option. Operates on a single line, since a directive inside an
+ * otherwise-reflowable multi-line block should only protect that one line. See `blocks.ts`.
  */
 export function checkIsDirective(line: string, extraDirectives: readonly string[] = []): boolean {
   const trimmed = line.trim();
@@ -100,7 +100,7 @@ export function checkIsDirective(line: string, extraDirectives: readonly string[
 /**
  * ESLint `max-len`'s URL heuristic: a char that isn't `:`/`/`/`?`/`#` immediately before `://`,
  * followed by a char that isn't `?`/`#`. Loose by design. A false positive just leaves a line
- * unwrapped, which is the safe direction (plan §7 step 0 is the real safety net either way).
+ * unwrapped, which is the safe direction: `wrap.ts`'s step 0 is the real safety net either way.
  */
 export function checkIsUrl(text: string): boolean {
   return /[^:/?#]:\/\/[^?#]/u.test(text);
@@ -133,8 +133,8 @@ export function checkIsExampleTag(line: string): boolean {
 }
 
 /**
- * Best-effort, fail-safe detector for tabular/aligned content across a candidate block's lines
- * (plan §8.3). Two tiers: a precise GFM table check (a pipe-bearing line directly followed by a
+ * Best-effort, fail-safe detector for tabular/aligned content across a candidate block's lines.
+ * Two tiers: a precise GFM table check (a pipe-bearing line directly followed by a
  * valid delimiter row), and a looser heuristic bundle (box-drawing/tree characters, or `|`/space
  * runs that land on the same column across `MIN_ALIGNED_LINES`+ lines). Returns `false` (never
  * touch the block) whenever a check is inconclusive. A false positive here only costs one

@@ -16,11 +16,10 @@ import {FIND_COMMENTS_BY_LANG, format, type Lang} from '../index.ts';
 type Mode = 'check' | 'write' | 'diff' | 'report-overwidth';
 
 /**
- * Priority-ordered classification for `--report-overwidth` (plan §9.3), checked against a
- * comment's original raw lines. First match wins. This is a manual-review sampling tool, not a
- * re-implementation of `checkIsTableLike`: `has-aligned-spaces` is deliberately looser than that
- * detector's real 3-line threshold, specifically to surface near-misses the real Tier-2 heuristic
- * doesn't catch.
+ * Priority-ordered classification for `--report-overwidth`, checked against a comment's original
+ * raw lines. First match wins. This is a manual-review sampling tool, not a re-implementation of
+ * `checkIsTableLike`: `has-aligned-spaces` is deliberately looser than that detector's real 3-line
+ * threshold, specifically to surface near-misses the real Tier-2 heuristic doesn't catch.
  */
 type OverwidthGroup =
   | 'has-pipe'
@@ -35,7 +34,7 @@ type OverwidthFinding = {
   readonly text: string;
 };
 
-/** Parsed `comment-fmt.json`, every key defaulted (plan §6). */
+/** Parsed `comment-fmt.json`, every key defaulted so the file itself is fully optional. */
 type Config = {
   readonly maxLength: number;
   readonly targetLength: number;
@@ -63,7 +62,7 @@ const CONFIG_FILE_NAME = 'comment-fmt.json';
 /**
  * Extensions `format()` actually knows how to reflow. Anything discovered outside this set is
  * silently left alone rather than reported as checked, written, or diffed (currently nothing --
- * every extension `DISCOVERABLE_EXTENSIONS` names now has a real lexer, per plan §12 Phase 6).
+ * every extension `DISCOVERABLE_EXTENSIONS` names now has a real lexer).
  */
 const FORMATTABLE_EXTENSIONS: ReadonlySet<string> = new Set([
   '.js',
@@ -76,7 +75,7 @@ const FORMATTABLE_EXTENSIONS: ReadonlySet<string> = new Set([
   '.astro'
 ]);
 
-/** Which `Lang` (plan §4) `format()` should use for a given formattable extension. */
+/** Which `Lang` `format()` should use for a given formattable extension. */
 const LANG_BY_EXTENSION: Readonly<Record<string, Lang>> = {
   '.js': 'js',
   '.jsx': 'js',
@@ -89,10 +88,10 @@ const LANG_BY_EXTENSION: Readonly<Record<string, Lang>> = {
 };
 
 /**
- * Full future language scope (plan §4/§12 Phase 6), used only to decide what file discovery turns
- * up. Kept wider than `FORMATTABLE_EXTENSIONS` so discovery doesn't need to change again the next
- * time a lexer is mid-flight (every extension named here currently has one, so the two sets are
- * identical today -- that's expected, not a sign either one is redundant).
+ * Full future language scope, used only to decide what file discovery turns up. Kept wider than
+ * `FORMATTABLE_EXTENSIONS` so discovery doesn't need to change again the next time a lexer is
+ * mid-flight (every extension named here currently has one, so the two sets are identical today --
+ * that's expected, not a sign either one is redundant).
  */
 const DISCOVERABLE_EXTENSIONS: ReadonlySet<string> = new Set([
   '.js',
@@ -109,6 +108,9 @@ const IGNORE_TIP =
   'Tip: add // comment-fmt-ignore before a comment, or comment-fmt-ignore-file near the top ' +
   'of a file, to exempt it.';
 
+/** `--check`-only, printed above the file list: `--diff` already shows the fix, so doesn't need it. */
+const CHECK_FIX_TIP = 'Run comment-fmt --write to fix, or comment-fmt --diff to preview the changes.';
+
 const USAGE = 'Usage: comment-fmt (--check | --write | --diff | --report-overwidth) [files...]';
 
 const DIRECTORIES_TO_SKIP: ReadonlySet<string> = new Set(['node_modules', '.git']);
@@ -122,7 +124,7 @@ const PARSE_OPTIONS = {
   'report-overwidth': {type: 'boolean', default: false}
 } as const;
 
-/** Order doubles as `runCli`'s classification priority: first match wins (plan §9.3). */
+/** Order doubles as `runCli`'s classification priority: first match wins. */
 const OVERWIDTH_GROUP_ORDER: readonly OverwidthGroup[] = [
   'has-pipe',
   'has-box-drawing',
@@ -215,6 +217,7 @@ export function runCli(argv: string[], cwd: string): number {
       process.stdout.write(`${renderDiff(relative(cwd, result.path), result.original, result.formatted)}\n`);
     }
   } else {
+    process.stdout.write(`${CHECK_FIX_TIP}\n\n`);
     for (const result of changed) {
       process.stdout.write(`${relative(cwd, result.path)}\n`);
     }
@@ -271,9 +274,9 @@ function formatFile(path: string, config: Config): FileResult {
 }
 
 /**
- * Loads `comment-fmt.json` from `cwd` if present, defaulting every key (plan §6). Fails fast on
- * malformed JSON or a wrong-typed known key rather than silently ignoring a broken config, per
- * this repo's fail-fast convention.
+ * Loads `comment-fmt.json` from `cwd` if present, defaulting every key. Fails fast on malformed
+ * JSON or a wrong-typed known key rather than silently ignoring a broken config, per this repo's
+ * fail-fast convention.
  */
 function loadConfig(cwd: string): Config {
   const defaults: Config = {
@@ -288,7 +291,7 @@ function loadConfig(cwd: string): Config {
   try {
     raw = readFileSync(configPath, 'utf8');
   } catch {
-    // No config file. Defaults stand; this is the common case (plan §6: "most repos need no file").
+    // No config file. Defaults stand; most repos need no file at all.
     return defaults;
   }
 
@@ -347,10 +350,10 @@ function readStringArrayKey(
 }
 
 /**
- * Resolves the file list per plan §10: explicit argv wins outright (the hook path, where
- * `lint-staged` already did the filtering), otherwise a git repo is discovered via
- * `git ls-files` (gitignore-respecting for free), otherwise a plain recursive `node:fs` walk. Only
- * the discovery paths apply `ignore` patterns; explicit argv is used as given.
+ * Resolves the file list to operate on: explicit argv wins outright (the hook path, where
+ * `lint-staged` already did the filtering), otherwise a git repo is discovered via `git ls-files`
+ * (gitignore-respecting for free), otherwise a plain recursive `node:fs` walk. Only the discovery
+ * paths apply `ignore` patterns; explicit argv is used as given.
  */
 function discoverFiles(positionals: readonly string[], cwd: string, ignore: readonly string[]): string[] {
   if (positionals.length > 0) {
@@ -401,10 +404,10 @@ function walkDirectory(root: string): string[] {
 }
 
 /**
- * Converts the common glob subset used by `ignore` patterns (plan §6) to a `RegExp`: `*` matches
- * within one path segment, `**` matches across segments, and every other character is escaped
- * and matched literally. Deliberately not a full glob implementation, just enough for exclude
- * patterns without taking a library dependency (plan §10: zero runtime dependencies).
+ * Converts the common glob subset used by `ignore` patterns to a `RegExp`: `*` matches within one
+ * path segment, `**` matches across segments, and every other character is escaped and matched
+ * literally. Deliberately not a full glob implementation, just enough for exclude patterns
+ * without taking a library dependency (this package ships zero runtime dependencies).
  */
 function globToRegExp(pattern: string): RegExp {
   let source = '';
@@ -425,13 +428,13 @@ function globToRegExp(pattern: string): RegExp {
 }
 
 /**
- * Prints the `--report-overwidth` sample (plan §9.3): every comment that (a) has at least one
- * original physical line exceeding `config.maxLength` and (b) actually gets changed by `format()`
- * (so a protected/exempted overflow, e.g. a directive or a table the step-0 gate or Tier-2
- * heuristic already caught, never shows up as a false "miss"), grouped by shape with a bounded
- * example sample per group. Deliberately a manual-review tool, not a pass/fail check: there's no
- * "correct" output here, only a readable sample a human reads to judge whether any `has-*` group
- * contains content that should have been protected but wasn't (plan §8.3).
+ * Prints the `--report-overwidth` sample: every comment that (a) has at least one original
+ * physical line exceeding `config.maxLength` and (b) actually gets changed by `format()` (so a
+ * protected/exempted overflow, e.g. a directive or a table the step-0 gate or Tier-2 heuristic
+ * already caught, never shows up as a false "miss"), grouped by shape with a bounded example
+ * sample per group. Deliberately a manual-review tool, not a pass/fail check: there's no "correct"
+ * output here, only a readable sample a human reads to judge whether any `has-*` group contains
+ * content that should have been protected but wasn't.
  */
 function printOverwidthReport(results: readonly FileResult[], config: Config): void {
   const findingsByGroup = new Map<OverwidthGroup, OverwidthFinding[]>();
@@ -523,8 +526,8 @@ function checkHasAlignedSpaces(lines: readonly string[]): boolean {
 
 /**
  * Minimal unified-diff renderer for `--diff` output: no external diff library, just a line-level
- * LCS-based hunk between `before` and `after`. Good enough to make `--diff` reviewable (plan
- * §9.5), not a general-purpose diff tool.
+ * LCS-based hunk between `before` and `after`. Good enough to make `--diff` reviewable, not a
+ * general-purpose diff tool.
  */
 function renderDiff(path: string, before: string, after: string): string {
   const beforeLines = before.split('\n');

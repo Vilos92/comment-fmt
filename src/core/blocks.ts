@@ -13,8 +13,8 @@ import {
 /**
  * A logical unit within a comment body: the granularity `wrap.ts` reflows at. `protected`
  * blocks (blank-line separators, fenced code, directive lines, table-like content) are always
- * passed through unchanged, matching the plan §7 step 0 gate's "if uncertain, don't touch it"
- * bias at block scope instead of whole-comment scope.
+ * passed through unchanged, matching `wrap.ts`'s step 0 "if uncertain, don't touch it" bias at
+ * block scope instead of whole-comment scope.
  */
 export type Block = {
   readonly lines: readonly string[];
@@ -41,10 +41,9 @@ export const LIST_MARKER = /^\s*(?:[-*+]|\d+[.)])\s+/;
 /**
  * Splits a comment body's lines into `Block`s. A new block starts at a blank line, a list-item
  * marker, a JSDoc-style `@tag` line, an `@example` region, or a fenced-code boundary. Each is a
- * point where merging across it into one wrapped paragraph would be wrong. A directive line (plan
- * §8.1) always forms its own single-line protected block, whether or not it sits inside an
- * otherwise-wrappable block comment, so only that line is exempted rather than the whole
- * surrounding block.
+ * point where merging across it into one wrapped paragraph would be wrong. A directive line always
+ * forms its own single-line protected block, whether or not it sits inside an otherwise-wrappable
+ * block comment, so only that line is exempted rather than the whole surrounding block.
  */
 export function splitIntoBlocks(lines: readonly string[], extraDirectives: readonly string[] = []): Block[] {
   const blocks: Block[] = [];

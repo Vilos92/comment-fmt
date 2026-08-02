@@ -36,7 +36,7 @@ type TagInfo = {
  * HTML's strongest signal that an author wants this content preserved exactly as authored, and
  * that's worth respecting for everything inside it, comments included, matching this project's own
  * conservative "if uncertain, don't touch it" bias. `'delegate-js'`/`'delegate-css'` elements hand
- * their body to the JS/CSS lexer to find real `//`/`/* *​/` comments within, per plan §4.
+ * their body to the JS/CSS lexer to find real `//`/`/* *​/` comments within.
  */
 type OpaqueKind = 'skip' | 'delegate-js' | 'delegate-css';
 
@@ -101,7 +101,7 @@ const OPAQUE_ELEMENTS: ReadonlyMap<string, OpaqueKind> = new Map([
  * `'skip'` element (`<textarea>`, `<title>`, `<noscript>`, and `<script>`/`<style>`'s own
  * delimiter-recognition once their body is delegated) or inside `<pre>` (real comments, but never
  * touched -- see `OpaqueKind`), and delegating `<script>`/`<style>` bodies to `js.ts`/`css.ts` with
- * their offsets remapped from the extracted substring back onto this document (plan §4).
+ * their offsets remapped from the extracted substring back onto this document.
  *
  * `start`/`end` bound the scan to a region of `source` without changing what `source` itself
  * means: every offset computation (`indent`, `ownLine`, and any nested `<script>`/`<style>`
@@ -313,7 +313,7 @@ function findRawTextEnd(source: string, bodyStart: number, tagName: string): num
 /**
  * Delegates a `<script>`/`<style>` body to `js.ts`/`css.ts`, then remaps each found comment's
  * offsets from the extracted substring back onto the full document and re-derives it via the
- * shared `buildComment` (plan §4's "position-offsetting, not a simple call-through"). Re-deriving
+ * shared `buildComment` (position-offsetting, not a simple call-through). Re-deriving
  * from the real document -- rather than just shifting the nested lexer's own `indent`/`ownLine`/
  * `linePrefix` -- matters whenever a comment sits on the same source line as content before the
  * delegated region starts (e.g. `<script>const x = 1; // c</script>`), which the substring alone
@@ -331,7 +331,7 @@ function delegateComments(
   return nested.map(comment => ({
     // `lang` overrides `format()`'s own `options.lang` (`'html'`) for this one comment: it's
     // genuinely JS or CSS, so it should expand using that language's `* ` star convention, not
-    // HTML's plain-indent one, if it needs to grow from single-line to multi-line (plan §4).
+    // HTML's plain-indent one, if it needs to grow from single-line to multi-line.
     ...buildComment(comment.kind, source, comment.start + bodyStart, comment.end + bodyStart),
     lang
   }));

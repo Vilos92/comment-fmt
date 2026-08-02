@@ -28,9 +28,16 @@ export type WrapOptions = {
  * columns of caller-applied decoration (indent plus that decoration) are added back on. The
  * caller strips and re-applies decoration. This function only ever sees and returns bare text.
  *
+ * Five steps, referenced by number elsewhere in `core/`:
+ *   0. Overflow-only gate: if every line already fits, return it byte-for-byte unchanged.
+ *   1. Split the body into logical blocks (blank line / list-item / tag / fence boundaries).
+ *   2. Greedily fill only the blocks that contain an overflowing line; others pass through.
+ *   3. Orphan guard: re-lay out a short trailing line by pulling a word from the line before it.
+ *   4. Hard invariant: no output line may ever exceed `maxLength`.
+ *
  * Greedy fill toward `targetLength`, not Knuth-Plass `balance`: adding one word should change the
  * minimum number of lines, not rewrite a whole paragraph, which is what keeps an autofixer's
- * diffs (and `git blame`) trustworthy on every run (plan §7).
+ * diffs (and `git blame`) trustworthy on every run.
  *
  * Step 0 is the tool's primary safety property, not an optimisation. If every line already fits,
  * the input is returned byte-for-byte unchanged: no block splitting, no normalisation, nothing
@@ -174,8 +181,8 @@ function greedyFill(words: readonly string[], targetBudget: number, maxBudget: n
  * leaving the rest of the greedy fill's tight packing untouched. Lines before the window are
  * never read or rewritten. That's what keeps this local in the same sense greedy fill is local: a
  * change far from the end of a long comment can only affect lines from that point forward, never
- * lines before it, and this step can only ever narrow that already-forward-only blast radius
- * further, down to a small fixed window at the very end (plan §7 step 3).
+ * lines before it, and this step (step 3) can only ever narrow that already-forward-only blast
+ * radius further, down to a small fixed window at the very end.
  */
 function applyOrphanGuard(lines: readonly string[], maxBudget: number, orphanMinRatio: number): string[] {
   if (lines.length < 2) {

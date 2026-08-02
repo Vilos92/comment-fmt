@@ -5,7 +5,7 @@
 # Fixture pairs are curated test data, not source -- the same reasoning vite.config.ts's own
 # fmt/lint ignorePatterns already apply to oxfmt/oxlint. But `comment-fmt --write` itself has no
 # such exclusion when given explicit file arguments: the `ignore` config option only filters
-# *discovery* (plan §6), deliberately, so a file named explicitly is always processed regardless.
+# *discovery*, deliberately, so a file named explicitly is always processed regardless.
 # lint-staged feeds every staged file as an explicit argument, bypassing that discovery-only
 # exclusion entirely, so this filter has to happen here instead, one layer up.
 #

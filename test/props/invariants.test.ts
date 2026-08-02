@@ -1,7 +1,8 @@
-// Property tests for the four invariants in plan §9.1. Run over randomly generated JS snippets
-// containing one comment with a randomly generated body, rather than fully arbitrary strings.
-// Most arbitrary strings aren't meaningfully JS-shaped, and these properties are about how the
-// formatter treats realistic comment content, not about surviving parser-level garbage (the
+// Property tests for the tool's four core invariants: idempotency, content preservation, the
+// width cap, and code invariance (see the `test()` names below). Run over randomly generated JS
+// snippets containing one comment with a randomly generated body, rather than fully arbitrary
+// strings. Most arbitrary strings aren't meaningfully JS-shaped, and these properties are about how
+// the formatter treats realistic comment content, not about surviving parser-level garbage (the
 // fixture corpus in `test/fixtures/js` covers targeted adversarial/degenerate cases instead).
 import fc from 'fast-check';
 import {describe, expect, test} from 'vite-plus/test';

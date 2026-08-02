@@ -1,10 +1,10 @@
-// Fixture-pair snapshot harness (plan §9.5). Workflow: drop a `<name>.input.<ext>` file in
+// Fixture-pair snapshot harness. Workflow: drop a `<name>.input.<ext>` file in
 // `test/fixtures/<lang>/`, run `UPDATE_SNAPSHOTS=1 vp test` to generate the matching
 // `<name>.expected.<ext>`, eyeball it, commit both. Re-running without the env var just asserts
 // the formatter's output still matches the committed `.expected` file.
 //
-// `js`, `css`, `html`, and `astro` all have real formatters behind them as of Phase 2 and Phase 6
-// (`lang/{js,css,html,astro}.ts` + `core/`).
+// `js`, `css`, `html`, and `astro` all have real formatters behind them (`lang/{js,css,html,
+// astro}.ts` + `core/`).
 import {existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync} from 'node:fs';
 import {dirname, join} from 'node:path';
 import {fileURLToPath} from 'node:url';
@@ -43,7 +43,7 @@ for (const lang of LANGS) {
 
   describe(`fixtures/${lang}`, () => {
     if (cases.length === 0) {
-      // No fixtures committed yet for this language. Expected until Phase 2/6 add them.
+      // No fixtures committed yet for this language.
       test.skip('no fixtures yet', () => {});
       return;
     }
