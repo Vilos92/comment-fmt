@@ -54,6 +54,15 @@ type DiffOpKind = 'context' | 'add' | 'remove';
 
 type DiffOp = {readonly kind: DiffOpKind; readonly line: string};
 
+/** A windowed run of `DiffOp`s plus the 1-indexed starting line each side begins at. */
+type Hunk = {
+  readonly beforeStart: number;
+  readonly beforeCount: number;
+  readonly afterStart: number;
+  readonly afterCount: number;
+  readonly ops: readonly DiffOp[];
+};
+
 /*
  * Constants.
  */
@@ -117,6 +126,9 @@ const USAGE = 'Usage: comment-fmt (--check | --write | --diff | --report-overwid
 const DIRECTORIES_TO_SKIP: ReadonlySet<string> = new Set(['node_modules', '.git']);
 
 const DIFF_PREFIXES: Record<DiffOpKind, string> = {context: ' ', add: '+', remove: '-'};
+
+/** Lines of unchanged context kept on each side of a change, matching `diff -U3`'s default. */
+const DIFF_CONTEXT_LINES = 3;
 
 const PARSE_OPTIONS = {
   check: {type: 'boolean', default: false},
@@ -534,18 +546,86 @@ function checkHasAlignedSpaces(lines: readonly string[]): boolean {
 }
 
 /**
- * Minimal unified-diff renderer for `--diff` output: no external diff library, just a line-level
- * LCS-based hunk between `before` and `after`. Good enough to make `--diff` reviewable, not a
- * general-purpose diff tool.
+ * Minimal unified-diff renderer for `--check`/`--diff` output: no external diff library, just a
+ * line-level LCS-based hunk between `before` and `after`, windowed to `DIFF_CONTEXT_LINES` of
+ * context per `groupIntoHunks` below. Good enough to make a change reviewable straight from a CI
+ * log, not a general-purpose diff tool.
  */
 function renderDiff(path: string, before: string, after: string): string {
   const beforeLines = before.split('\n');
   const afterLines = after.split('\n');
   const ops = computeLineDiff(beforeLines, afterLines);
+  const hunks = groupIntoHunks(ops, DIFF_CONTEXT_LINES);
 
   const header = [`--- ${path}`, `+++ ${path}`];
-  const body = ops.map(op => `${DIFF_PREFIXES[op.kind]}${op.line}`);
+  const body = hunks.flatMap(hunk => [
+    `@@ -${hunk.beforeStart},${hunk.beforeCount} +${hunk.afterStart},${hunk.afterCount} @@`,
+    ...hunk.ops.map(op => `${DIFF_PREFIXES[op.kind]}${op.line}`)
+  ]);
   return [...header, ...body].join('\n');
+}
+
+/**
+ * Windows `ops` down to runs of actual changes plus `contextLines` of unchanged lines on each
+ * side, the same trim `diff -U<n>` applies -- without it, a single reflowed comment in an
+ * otherwise-untouched thousand-line file renders as a thousand-line "diff", unreadable in a CI
+ * log despite the underlying change being a few lines. Two change regions closer together than
+ * `2 * contextLines` merge into one hunk rather than showing duplicate/overlapping context twice.
+ */
+function groupIntoHunks(ops: readonly DiffOp[], contextLines: number): Hunk[] {
+  const changeIndices = ops.reduce<number[]>((indices, op, idx) => {
+    if (op.kind !== 'context') {
+      indices.push(idx);
+    }
+    return indices;
+  }, []);
+  if (changeIndices.length === 0) {
+    return [];
+  }
+
+  const ranges: Array<[number, number]> = [];
+  let rangeStart = Math.max(0, (changeIndices[0] as number) - contextLines);
+  let rangeEnd = Math.min(ops.length - 1, (changeIndices[0] as number) + contextLines);
+  for (const changeIdx of changeIndices.slice(1)) {
+    const windowStart = Math.max(0, changeIdx - contextLines);
+    if (windowStart <= rangeEnd + 1) {
+      rangeEnd = Math.min(ops.length - 1, changeIdx + contextLines);
+    } else {
+      ranges.push([rangeStart, rangeEnd]);
+      rangeStart = windowStart;
+      rangeEnd = Math.min(ops.length - 1, changeIdx + contextLines);
+    }
+  }
+  ranges.push([rangeStart, rangeEnd]);
+
+  // Line each op starts at on each side, tracked incrementally: an `add` never advances the
+  // before-counter, a `remove` never advances the after-counter, matching how a unified diff's
+  // `@@` header numbers the first retained line on each side of a hunk.
+  const beforeLineAt: number[] = [];
+  const afterLineAt: number[] = [];
+  let beforeLine = 1;
+  let afterLine = 1;
+  for (const op of ops) {
+    beforeLineAt.push(beforeLine);
+    afterLineAt.push(afterLine);
+    if (op.kind !== 'add') {
+      beforeLine += 1;
+    }
+    if (op.kind !== 'remove') {
+      afterLine += 1;
+    }
+  }
+
+  return ranges.map(([start, end]) => {
+    const slice = ops.slice(start, end + 1);
+    return {
+      beforeStart: beforeLineAt[start] as number,
+      beforeCount: slice.filter(op => op.kind !== 'add').length,
+      afterStart: afterLineAt[start] as number,
+      afterCount: slice.filter(op => op.kind !== 'remove').length,
+      ops: slice
+    };
+  });
 }
 
 /** Classic O(n*m) LCS table, sized for a single reflowed file rather than arbitrary large inputs. */

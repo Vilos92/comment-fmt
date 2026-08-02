@@ -184,6 +184,23 @@ describe('cli', () => {
       expect(output).toContain('+//');
       expect(output).toContain('comment-fmt-ignore');
     });
+
+    test('windows a large file down to context around the change, with a line-numbered hunk header', () => {
+      const filePath = join(scratchDir, 'large.js');
+      const beforeFiller = Array.from({length: 50}, (_, i) => `const before${i} = ${i};`);
+      const afterFiller = Array.from({length: 50}, (_, i) => `const after${i} = ${i};`);
+      const original = [...beforeFiller, OVERFLOWING_COMMENT_LINE, 'const x = 1;', ...afterFiller].join('\n');
+      writeFileSync(filePath, original);
+
+      const exitCode = runCli(['--diff', filePath], scratchDir);
+
+      expect(exitCode).toBe(1);
+      const output = stdout.join('');
+      expect(output).toContain('@@ -48,');
+      expect(output).not.toContain('before0 ');
+      expect(output).not.toContain('after49');
+      expect(output.split('\n').length).toBeLessThan(20);
+    });
   });
 
   describe('--report-overwidth', () => {
