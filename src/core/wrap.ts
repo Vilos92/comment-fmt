@@ -6,6 +6,7 @@ import {
   ORPHAN_GUARD_WINDOW_LINES
 } from './constants.ts';
 import {measure} from './measure.ts';
+import {checkIsDirective} from './predicates.ts';
 
 /*
  * Types.
@@ -58,7 +59,10 @@ export function wrap(lines: readonly string[], linePrefixWidth: number, options:
     return [...lines];
   }
 
-  const blocks = splitIntoBlocks(lines, extraDirectives);
+  const blocks = splitIntoBlocks(
+    splitOverflowingEmbeddedTagLines(lines, maxBudget, extraDirectives),
+    extraDirectives
+  );
 
   return blocks.flatMap(block => {
     if (block.protected || block.lines.every(line => measure(line) <= maxBudget)) {
@@ -71,6 +75,79 @@ export function wrap(lines: readonly string[], linePrefixWidth: number, options:
 /*
  * Helpers.
  */
+
+/**
+ * Splits an `@tag`-shaped token embedded mid-line onto its own physical line, so `blocks.ts`'s
+ * existing `checkIsTagLine` boundary rule (which only ever looks at where a line already starts)
+ * picks it up the same way it would if the tag had started its own line to begin with. JSDoc's own
+ * spec models a block tag as always followed by a line break, so a tag embedded mid-sentence was
+ * never conforming even before this tool touches it. Whether it happened to land at a line's start
+ * is otherwise incidental, driven only by whether the surrounding text still fit on one line at
+ * authoring time, not a signal the reader should have to infer meaning from.
+ *
+ * Only applies to a line that already overflows `maxBudget`: `wrap()`'s own step 0 gate already
+ * guarantees at least one line needs touching by the time this runs, but not every individual line
+ * does, and splitting one that already fits would touch content step 0's "if it fits, don't touch
+ * it" bias exists specifically to protect.
+ *
+ * Skips a directive line entirely (`eslint-disable-next-line @typescript-eslint/...`, `@ts-expect-
+ * error`, and the rest of `DIRECTIVE_MARKERS`): confirmed live, not hypothetical, splitting one
+ * apart is a correctness bug, not a cosmetic one. `eslint-disable-next-line @rule-name` split into
+ * two comments silently changes what it disables, exactly the class of bug `checkIsDirective`'s
+ * whole-line protection exists to prevent. `splitIntoBlocks` (called right after this) already
+ * re-derives the same check per line to decide what's protected, so this duplicates the test but
+ * not the protection logic itself.
+ */
+function splitOverflowingEmbeddedTagLines(
+  lines: readonly string[],
+  maxBudget: number,
+  extraDirectives: readonly string[]
+): string[] {
+  return lines.flatMap(line => {
+    if (measure(line) <= maxBudget || checkIsDirective(line, extraDirectives)) {
+      return [line];
+    }
+    return splitEmbeddedTagLine(line);
+  });
+}
+
+/**
+ * Finds every `@tag`-shaped token in `line` that isn't already effectively at the line's own
+ * start, and splits the line there. A real match sits at a word boundary (whitespace immediately
+ * before, a letter immediately after) so an email's `@` (always preceded by a non-whitespace
+ * local-part character) is never mistaken for one, and is excluded entirely inside a backtick span
+ * (`` `@ts-expect-error` `` names a directive, doesn't invoke it). Doesn't track a *multi-word*
+ * backtick span (rare, and word-splitting downstream loses that context anyway), only single
+ * backtick-wrapped tokens, which is the common case for naming a tag/directive in prose.
+ */
+function splitEmbeddedTagLine(line: string): string[] {
+  const splitPositions: number[] = [];
+  let inBacktick = false;
+  for (let i = 1; i < line.length; i += 1) {
+    const char = line[i];
+    if (char === '`') {
+      inBacktick = !inBacktick;
+      continue;
+    }
+    const isRealTagStart =
+      !inBacktick && char === '@' && /\s/.test(line[i - 1] as string) && /[a-zA-Z]/.test(line[i + 1] ?? '');
+    if (isRealTagStart && line.slice(0, i).trim().length > 0) {
+      splitPositions.push(i);
+    }
+  }
+  if (splitPositions.length === 0) {
+    return [line];
+  }
+
+  const parts: string[] = [];
+  let start = 0;
+  for (const position of splitPositions) {
+    parts.push(line.slice(start, position).replace(/\s+$/, ''));
+    start = position;
+  }
+  parts.push(line.slice(start));
+  return parts;
+}
 
 function fillBlock(
   lines: readonly string[],
