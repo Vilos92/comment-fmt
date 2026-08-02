@@ -1,68 +1,97 @@
 # comment-fmt
 
-A CLI that reformats comments in JavaScript/TypeScript, CSS/SCSS, HTML, and Astro: wraps overflowing
-lines to a fixed width and normalises multi-line block comment shape. Meant to run from a pre-commit
-hook, alongside your existing formatter.
+[![npm version](https://img.shields.io/npm/v/comment-fmt.svg)](https://www.npmjs.com/package/comment-fmt)
+[![CI](https://github.com/Vilos92/comment-fmt/actions/workflows/continuous-integration.yaml/badge.svg)](https://github.com/Vilos92/comment-fmt/actions/workflows/continuous-integration.yaml)
+
+Wraps over-width comments to a fixed line length and normalizes block-comment shape, for
+JS/TS/JSX/TSX, CSS/SCSS, HTML, and Astro. Runs from a pre-commit hook, next to whatever formatter
+you already use.
 
 ```bash
 npm install --save-dev comment-fmt
 ```
 
-## Why
+## Before / after
 
-A careful human writing a comment by hand tends to self-balance it reasonably well as they type --
-their eyes are tracking the column position. An agent generating the same comment often doesn't: it
-happily emits a line that blows past the configured print width, or wraps unevenly, because nothing
-in its generation loop is tracking column position the way a human's eyes are. As more of a
-codebase's comment volume comes from agents, "just eyeball it" stops being a plan.
+```diff
+-/** Retries a flaky network call up to `maxAttempts` times, doubling the delay between each attempt before giving up. */
++/**
++ * Retries a flaky network call up to `maxAttempts` times, doubling the delay
++ * between each attempt before giving up.
++ */
+ export function withRetry(fn: () => Promise<void>, maxAttempts = 3) {
+```
 
-This isn't only for agent-authored code, though. A human mid-review who just wants a deterministic
-way to hold the line on a width limit benefits too, independent of who wrote the comment.
+Everything else about the comment is untouched. Wording, directive comments, hand-aligned tables,
+ASCII diagrams — none of it is `comment-fmt`'s business. It only ever acts on a comment that's
+already over the width limit.
 
-What made this worth building rather than a quick script: making comment reflow a _deterministically
-correct_ operation -- never corrupting code, never mangling a hand-aligned table or ASCII diagram,
-converging instead of oscillating from run to run -- is a real engineering problem, not a
-solved-by-construction given. See [Overflow-only, by design](#overflow-only-by-design) below for how
-that's enforced.
+## Why this exists
 
-### Comparison
+A human writing a comment by hand tends to eyeball the column and self-wrap as they go. Generated
+code often doesn't — nothing in an LLM's token-by-token output is tracking where the print width
+falls, so comments routinely blow past it or wrap unevenly. `comment-fmt` turns that into a
+deterministic fix instead of a recurring note in review.
 
-Most formatters either don't touch comment prose at all, or only handle it as an afterthought:
-
-| Tool                                                                                          | Reflows comment prose?                                                                                                                                                                                 |
-| --------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| [`eslint-plugin-comment-length`](https://github.com/lasselupe33/eslint-plugin-comment-length) | Yes -- an ESLint rule with the same goal, JS/TS only. The closest prior art for this project.                                                                                                          |
-| Prettier                                                                                      | No. By design: Prettier repositions/re-indents comments but explicitly never reflows their text.                                                                                                       |
-| gofmt                                                                                         | No. Comment text is left untouched; only surrounding whitespace/positioning is normalised.                                                                                                             |
-| rustfmt                                                                                       | Off by default (`wrap_comments = false`); when enabled it wraps comment prose, but the option ships behind rustfmt's unstable/nightly feature gate.                                                    |
-| clang-format                                                                                  | The outlier here: `ReflowComments` defaults to `Always` in the base LLVM style, so it already reflows comment prose to the column limit by default. C/C++ scope, so it doesn't overlap with this tool. |
-| Biome                                                                                         | No, by design -- deliberately mirrors Prettier's stance here.                                                                                                                                          |
-
-`comment-fmt` fills that gap across JS/TS/JSX/TSX, CSS/SCSS, HTML, and Astro in one tool, with the
-width and shape rules described below, instead of leaving it to whichever per-language formatter you
-already run.
+It isn't only for generated code. Anyone who wants a hard width limit enforced without hand-wrapping
+gets the same benefit, regardless of who wrote the comment.
 
 ## What it does
 
-1. **Width** -- no comment line exceeds `maxLength` columns (110 by default), with reflow.
-2. **Block shape** -- multi-line block comments never carry content on their opening (`/**`, `/*`,
-   `<!--`) or closing (`*/`, `-->`) line. A comment that fits on one line collapses to it; a comment
-   that doesn't expands to a starred (JS/CSS) or plain-indented (HTML/Astro) multi-line block. This is
-   a one-way ratchet driven only by overflow: a multi-line comment that already fits is never
-   collapsed back down, no matter how short its content is.
+- **Width.** No comment line exceeds `maxLength` (110 by default). A line that's too long gets
+  wrapped.
+- **Block shape.** A multi-line block comment never carries content on its opening (`/**`, `/*`,
+  `<!--`) or closing (`*/`, `-->`) line. One-way ratchet: a comment collapses to a single line if it
+  fits, expands to a starred (JS/CSS) or plain-indented (HTML/Astro) block if it doesn't, and once
+  expanded it stays expanded even if a later edit shortens the content.
+- **Directive-aware.** `eslint-disable`, `@ts-expect-error`, `prettier-ignore`, `biome-ignore`, and
+  the rest of the usual tool directives are left alone even when they overflow, so wrapping one can
+  never silently change what it disables.
+- **Structure-aware.** Hand-aligned tables, ASCII/box-drawing diagrams, and fenced code blocks
+  inside JSDoc are detected and passed through untouched.
+- **Multi-language.** JS, TS, JSX, TSX, CSS, SCSS, HTML, and Astro (frontmatter and template both)
+  in one tool.
 
-Everything else about a comment -- its wording, its structure, tables, ASCII diagrams, directive
-comments (`eslint-disable`, `@ts-expect-error`, `prettier-ignore`, and friends) -- is left alone.
+### Why it's safe on hand-formatted content
 
-### Overflow-only, by design
+The tool never inspects a comment that already fits. That single gate does most of the safety work:
+nearly every hand-aligned table, box diagram, or deliberate line break in a real codebase already
+sits under the width limit, so it's never touched in the first place. The table/diagram heuristics
+only have to catch the rare over-width case, a much smaller and more forgiving problem than trying
+to correctly classify every structure a human might invent.
 
-The tool never even looks at a comment that already fits within `maxLength`. That single gate is what
-protects hand-formatted structure: nearly every ASCII table, aligned column block, box diagram, and
-deliberate line break in a real codebase already sits under the width limit, so the tool never has to
-recognize them, and cannot mangle them. Heuristic detection of tables/diagrams is the second line of
-defense for the rare over-width case, not the first -- a heuristic that has to correctly classify
-every structure a human might invent will eventually fail, whereas "if it already fits, don't touch
-it" cannot.
+<details>
+<summary>Two edge cases worth knowing about</summary>
+
+**A trailing `// comment` that's still too long after wrapping is left as one over-width line,
+never split.** Splitting it would put a `//`-only continuation right where the next statement's own
+leading comment could plausibly sit, genuinely ambiguous to a reader. It gets worse across a run of
+similar declarations, where only the lines that happen to overflow would grow an extra line, for a
+reason invisible on the page.
+
+**An `@tag` buried mid-sentence in a JSDoc comment gets hoisted onto its own line.** JSDoc's own
+spec expects a block tag to be followed by a line break; a tag embedded in running prose was never
+really functioning as a tag to begin with, as far as any JSDoc tooling is concerned. An `@` inside
+an email address, or inside backticks (`` `@ts-expect-error` `` naming a directive rather than
+invoking one), is left alone.
+
+</details>
+
+## How this compares
+
+Most formatters either don't touch comment prose at all, or treat it as an afterthought:
+
+| Tool                                                                                          | Reflows comment prose?                                                                                    |
+| --------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| [`eslint-plugin-comment-length`](https://github.com/lasselupe33/eslint-plugin-comment-length) | Same goal, as an ESLint rule. JS/TS only. The closest prior art here.                                     |
+| Prettier                                                                                      | Repositions and re-indents comments, never reflows their text. By design.                                 |
+| Biome                                                                                         | Same stance as Prettier, on purpose.                                                                      |
+| gofmt                                                                                         | Leaves comment text untouched entirely.                                                                   |
+| rustfmt                                                                                       | `wrap_comments` exists, but defaults off and sits behind the nightly-only feature gate.                   |
+| clang-format                                                                                  | The exception: `ReflowComments` defaults to `Always` in the base LLVM style. C/C++ only, no overlap here. |
+
+`comment-fmt` covers JS/TS/JSX/TSX, CSS/SCSS, HTML, and Astro in one tool, instead of leaving comment
+width to whichever per-language formatter happens to run.
 
 ## Escape hatches
 
@@ -75,12 +104,11 @@ Three forms, checked before anything else:
 | File           | `comment-fmt-ignore-file` within the first 5 lines       | The whole file is skipped     |
 
 Per language: `// comment-fmt-ignore` (JS), `/* comment-fmt-ignore */` (JS/CSS/JSX/TSX),
-`<!-- comment-fmt-ignore -->` (HTML/Astro). An optional reason may follow after `--` or `: `, and is
-ignored by the tool.
+`<!-- comment-fmt-ignore -->` (HTML/Astro). An optional reason may follow after `--` or `: `, and
+`comment-fmt` ignores it.
 
-`extraDirectives` in `comment-fmt.json` (below) can add repo-specific directive prefixes to the
-built-in protected list (`eslint-disable`, `@ts-expect-error`, `prettier-ignore`, `biome-ignore`,
-`webpackChunkName`, and similar tool directives) without needing this escape hatch at all.
+`extraDirectives` in `comment-fmt.json` (below) adds repo-specific directive prefixes to the
+built-in protected list without needing this escape hatch at all.
 
 ## Usage
 
@@ -91,9 +119,9 @@ format(source, {lang: 'js'}); // 'js' | 'css' | 'html' | 'astro', defaults to 'j
 // reflows over-width // and /* */ comments; everything else is untouched
 ```
 
-...and via the CLI. With no file arguments it discovers every tracked file via `git ls-files` (not a
-directory walk -- a trailing `.` is treated as one explicit, literal file path, which matches nothing
-and silently no-ops, so don't pass one):
+...and via the CLI. With no file arguments it discovers every tracked file through `git ls-files`,
+not a directory walk — a trailing `.` is treated as one explicit, literal file path that matches
+nothing and silently no-ops, so don't pass one:
 
 ```bash
 comment-fmt --check   # exit 1 if any tracked file would change
@@ -101,43 +129,53 @@ comment-fmt --write   # rewrite over-width comments in place
 comment-fmt --diff    # print what would change, without writing
 ```
 
-Or pass explicit files (the pre-commit hook path -- the staged-file runner already filtered to staged
-files, so no discovery happens):
+Or pass explicit files, the pre-commit hook path, where the staged-file runner already narrowed the
+list down and no discovery is needed:
 
 ```bash
 comment-fmt --write src/foo.ts src/bar.css
 ```
 
-`comment-fmt --report-overwidth [files...]` is a separate, manual-review tool: it prints every
-over-width comment `format()` actually changed, grouped by shape (pipe-delimited, box-drawing,
+`comment-fmt --report-overwidth [files...]` is a separate manual-review tool. It prints every
+over-width comment that `format()` actually changed, grouped by shape (pipe-delimited, box-drawing,
 aligned-space, tag-line, prose), so a human can sample the output and judge whether the heuristics
-above are missing anything -- not a pass/fail check, and not part of the normal `--check`/`--write`
-workflow.
+above are missing anything. It's not a pass/fail check, and it isn't part of the normal
+`--check`/`--write` workflow.
 
 ## Configuration
 
-An optional `comment-fmt.json` in the repo root; most repos need no file at all:
+An optional `comment-fmt.json` in the repo root. Most repos don't need one:
 
-| Key               | Default | Notes                                                                                                                                                                             |
-| ----------------- | ------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `maxLength`       | `110`   | Hard cap. No output line may ever exceed it.                                                                                                                                      |
-| `targetLength`    | `105`   | Soft wrap target; always `<= maxLength`.                                                                                                                                          |
-| `ignore`          | `[]`    | Glob patterns. Applies whether a file was found by discovery or named explicitly (the pre-commit hook path), so a pre-commit hook that feeds every staged path still skips these. |
-| `extraDirectives` | `[]`    | Appended to the built-in protected-directive list.                                                                                                                                |
+| Key               | Default | Notes                                                                                                                                        |
+| ----------------- | ------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| `maxLength`       | `110`   | Hard cap. No output line ever exceeds it.                                                                                                    |
+| `targetLength`    | `105`   | Soft wrap target, always `<= maxLength`.                                                                                                     |
+| `ignore`          | `[]`    | Glob patterns. Applies to a file whether it was discovered or named explicitly, so a hook that feeds every staged path still respects these. |
+| `extraDirectives` | `[]`    | Extra prefixes appended to the built-in protected-directive list.                                                                            |
 
-Everything else is intentionally hardcoded: no wrap-strategy option, no per-file overrides, no
-`ignoreUrls` toggle (URLs are always left unbroken), no `tabSize` (assumes 2).
+Everything else is hardcoded on purpose: no wrap-strategy option, no per-file overrides, no
+`ignoreUrls` toggle, no `tabSize`.
 
-## Pre-commit hook wiring
+A common use for `ignore` is excluding generated files and test fixtures, content nothing should
+reformat, `comment-fmt` included:
 
-`comment-fmt --write` rewrites files during the hook, which puts real weight on re-staging and
-partial-staging behavior. Run it as the **last** step in your staged-file runner, after your language
-formatter (Prettier/Biome/oxfmt/etc.), not before: formatters commonly re-indent comments as part of
-formatting the code around them, and this tool's width math depends on a comment's _final_
-indentation. Running it first risks wrapping to a width that the formatter's own reindent then pushes
-back over the limit, producing a spurious diff on the very next commit.
+```json
+{
+  "ignore": ["**/routeTree.gen.ts", "test/fixtures/**"]
+}
+```
 
-With [`lint-staged`](https://github.com/okonet/lint-staged):
+## Pre-commit hooks
+
+`comment-fmt --write` rewrites files as part of the hook, which puts real weight on getting
+re-staging right. Run it **last**, after your language formatter. Prettier, Biome, oxfmt, whatever
+you use, re-indents comments as part of formatting the surrounding code, and this tool's width math
+depends on that final indentation. Run it first, and the formatter's own re-indent can push a line
+back over the limit right after you fixed it, producing a diff on the very next commit for no
+reason.
+
+<details open>
+<summary><a href="https://github.com/okonet/lint-staged"><code>lint-staged</code></a> (most projects)</summary>
 
 ```jsonc
 // package.json
@@ -151,8 +189,41 @@ With [`lint-staged`](https://github.com/okonet/lint-staged):
 }
 ```
 
-With [`lefthook`](https://github.com/evilmartians/lefthook), `stage_fixed: true` is required --
-without it, a rewrite never reaches the commit:
+`lint-staged` needs something to actually invoke it on commit. If nothing does yet,
+[`simple-git-hooks`](https://github.com/toplenboren/simple-git-hooks) is a lightweight installer for
+that:
+
+```jsonc
+{
+  "simple-git-hooks": {"pre-commit": "npx lint-staged"},
+  "scripts": {"prepare": "simple-git-hooks"}
+}
+```
+
+</details>
+
+<details>
+<summary><a href="https://viteplus.dev">Vite+</a> projects</summary>
+
+Vite+'s own `staged` config is built on `lint-staged` and works the same way, one array, comment-fmt
+last:
+
+```ts
+// vite.config.ts
+export default defineConfig({
+  staged: {
+    '*': ['vp check --fix', 'comment-fmt --write']
+  }
+});
+```
+
+</details>
+
+<details>
+<summary><a href="https://github.com/evilmartians/lefthook">lefthook</a></summary>
+
+`stage_fixed: true` is required. It's off by default, and without it a rewrite never reaches the
+commit:
 
 ```yml
 pre-commit:
@@ -163,9 +234,14 @@ pre-commit:
       stage_fixed: true
 ```
 
-In CI, `comment-fmt --check` is an independent validation from your formatter's own check --
-there's no ordering constraint the way there is for the `--write` hook step, since `--check` never
-rewrites:
+</details>
+
+In a monorepo, wiring this once at the workspace root is usually enough. File discovery runs from
+wherever the hook runs, so a single root-level config already reaches every package without
+per-workspace setup.
+
+In CI, `comment-fmt --check` is independent of your formatter's own check. There's no ordering
+constraint the way there is for the write-side hook, since `--check` never rewrites:
 
 ```bash
 your-formatter --check . && comment-fmt --check .
