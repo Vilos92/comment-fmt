@@ -124,10 +124,14 @@ not a directory walk — a trailing `.` is treated as one explicit, literal file
 nothing and silently no-ops, so don't pass one:
 
 ```bash
-comment-fmt --check   # exit 1 if any tracked file would change
+comment-fmt --check   # print a diff of what's wrong and exit 1 if anything would change
 comment-fmt --write   # rewrite over-width comments in place
-comment-fmt --diff    # print what would change, without writing
+comment-fmt --diff    # same output as --check, minus the "run --write to fix" tip
 ```
+
+Both `--check` and `--diff` print a standard `diff -U3`-style unified diff, windowed to a few
+lines of context around each change with a `@@ -line,count +line,count @@` header, so a CI failure
+is readable straight from the log without re-running anything locally.
 
 Or pass explicit files, the pre-commit hook path, where the staged-file runner already narrowed the
 list down and no discovery is needed:
