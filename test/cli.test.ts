@@ -1,9 +1,11 @@
 // CLI end-to-end tests. Each test builds a scratch directory under `os.tmpdir()`, runs `runCli`
 // directly against it, and asserts both the returned exit code and the resulting filesystem/stdout
 // state. Never touches this repo's own files.
-import {mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync} from 'node:fs';
+import {spawnSync} from 'node:child_process';
+import {mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
+import {fileURLToPath} from 'node:url';
 
 import {afterEach, beforeEach, describe, expect, test, vi} from 'vite-plus/test';
 
@@ -318,5 +320,35 @@ describe('cli', () => {
       expect(exitCodeExplicit).toBe(1);
       expect(stdout.join('')).toContain('lib.js');
     });
+  });
+});
+
+/**
+ * Every real install invokes this file through the `bin` symlink npm/bun/yarn create, never
+ * directly, so `runCli`-level tests above (which import and call the function in-process) can
+ * never exercise the module's own process-entrypoint guard. Confirmed as a real, live bug, not a
+ * hypothetical: Node/Bun resolve a symlink when loading a module, so `import.meta.url` already
+ * points at the real file, but `process.argv[1]` keeps the symlink path actually invoked -- a
+ * naive `import.meta.url === file://${process.argv[1]}` check never matched, and the published
+ * `comment-fmt` binary silently no-opped (exit 0, no output) on every real invocation.
+ */
+describe('entrypoint guard', () => {
+  test("runs when invoked through a symlink, matching how a real install's bin resolves", () => {
+    const scratchDir = mkdtempSync(join(tmpdir(), 'comment-fmt-entrypoint-'));
+    try {
+      const entryPath = fileURLToPath(new URL('../src/cli/index.ts', import.meta.url));
+      const symlinkPath = join(scratchDir, 'comment-fmt-bin');
+      symlinkSync(entryPath, symlinkPath);
+
+      const filePath = join(scratchDir, 'overflow.js');
+      writeFileSync(filePath, `${OVERFLOWING_COMMENT_LINE}\nconst x = 1;\n`);
+
+      const result = spawnSync('bun', [symlinkPath, '--check', filePath], {encoding: 'utf8'});
+
+      expect(result.status).toBe(1);
+      expect(result.stdout).toContain('overflow.js');
+    } finally {
+      rmSync(scratchDir, {recursive: true, force: true});
+    }
   });
 });

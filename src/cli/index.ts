@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 import {execFileSync} from 'node:child_process';
-import {readdirSync, readFileSync, writeFileSync} from 'node:fs';
+import {readdirSync, readFileSync, realpathSync, writeFileSync} from 'node:fs';
 import {extname, join, relative} from 'node:path';
+import {fileURLToPath} from 'node:url';
 import {parseArgs} from 'node:util';
 
 import {DEFAULT_MAX_LENGTH, DEFAULT_TARGET_LENGTH} from '../core/constants.ts';
@@ -227,8 +228,13 @@ export function runCli(argv: string[], cwd: string): number {
 }
 
 // Only reached when run as a real process (see `test/cli.test.ts` for direct `runCli` testing);
-// guarded so importing this module never has a side effect of its own.
-if (import.meta.url === `file://${process.argv[1]}`) {
+// guarded so importing this module never has a side effect of its own. Compares resolved real
+// paths, not `import.meta.url === file://${process.argv[1]}` directly: Node resolves symlinks when
+// loading a module, so `import.meta.url` already points at the real file, but `process.argv[1]`
+// keeps whatever path was actually invoked. Every real install runs this file through the `bin`
+// symlink npm/bun/yarn create, so those two never matched and the CLI silently no-opped on every
+// real invocation -- confirmed live against the actual published package, not a hypothetical.
+if (process.argv[1] !== undefined && fileURLToPath(import.meta.url) === realpathSync(process.argv[1])) {
   const exitCode = runCli(process.argv.slice(2), process.cwd());
   process.exit(exitCode);
 }

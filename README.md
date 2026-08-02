@@ -4,8 +4,9 @@ A CLI that reformats comments in JavaScript/TypeScript, CSS/SCSS, HTML, and Astr
 lines to a fixed width and normalises multi-line block comment shape. Meant to run from a pre-commit
 hook, alongside your existing formatter.
 
-> Not yet published to npm (`package.json` stays at `0.0.0` deliberately). Everything in this README
-> works today from source -- see [Development](#development).
+```bash
+bun add -D comment-fmt   # or: npm install --save-dev comment-fmt
+```
 
 ## Why
 
